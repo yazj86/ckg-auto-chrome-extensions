@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CKG Auto - Panel</title>
+    <link href="lib/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/bootstrap.bundle.min.js"></script>
+    <script src="lib/sweetalert2.js"></script>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+
+  <body class="p-3 position-relative">
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+      <div class="card-body p-4">
+        <!-- HEADER PANEL -->
+        <div
+          class="d-flex align-items-center gap-2 mb-4"
+          style="color: #118a9a; font-size: 1.35rem; font-weight: 600"
+        >
+          <img
+            src="images/ckg_automation.png"
+            alt="icon"
+            style="width: 28px; height: 28px; object-fit: contain"
+          />
+          <span>CKG Auto Panel</span>
+        </div>
+
+        <!-- ==================== TAB NAVIGATION ==================== -->
+        <ul class="nav nav-tabs mt-3 mb-3" id="registrationTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="tab-individu"
+              data-bs-toggle="tab"
+              data-bs-target="#panel-individu"
+              type="button"
+              role="tab"
+              aria-controls="panel-individu"
+              aria-selected="true"
+            >
+              🧑‍💼 Individu
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="tab-sekolah"
+              data-bs-toggle="tab"
+              data-bs-target="#panel-sekolah"
+              type="button"
+              role="tab"
+              aria-controls="panel-sekolah"
+              aria-selected="false"
+            >
+              🏫 Sekolah
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="registrationTabsContent">
+          <!-- ==================== PANEL INDIVIDU ==================== -->
+          <div
+            class="tab-pane fade show active"
+            id="panel-individu"
+            role="tabpanel"
+            aria-labelledby="tab-individu"
+          >
+            <button
+              id="openDataPreparationIndividu"
+              class="btn btn-primary w-100 mt-2 mb-2"
+            >
+              Persiapan Data Individu
+            </button>
+
+            <!-- Tanggal Pemeriksaan hanya untuk Individu -->
+            <div class="mb-3">
+              <div class="form-group p-1 border rounded bg-light">
+                <label
+                  for="tanggal_pemeriksaan_individu"
+                  class="form-label fw-bold mb-1 d-block"
+                  title="Tanggal Pemeriksaan"
+                >
+                  Tanggal Pemeriksaan -
+                  <span class="text-danger blink-animation"
+                    >Wajib isi tanggal pemeriksaan!!</span
+                  >
+                </label>
+                <select id="tanggal_pemeriksaan_individu" class="form-select">
+                  <!-- Opsi 1-31 akan di-generate otomatis via JS -->
+                </select>
+              </div>
+            </div>
+
+            <hr />
+            <button
+              id="btnRefreshIndividu"
+              class="btn btn-primary btn-sm w-100 mt-2 mb-1"
+            >
+              Refresh Data
+            </button>
+
+            <div
+              class="table-responsive hide-on-minimized"
+              style="max-height: 400px; overflow-y: auto; overflow-x: auto"
+            >
+              <table
+                class="table table-bordered table-striped table-sm table-compact text-nowrap"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>Aksi</th>
+                    <th>Validitas</th>
+                    <th>No</th>
+                    <th>NIK</th>
+                    <th>Nama</th>
+                    <th style="white-space: nowrap">Tgl Lahir</th>
+                    <th style="white-space: nowrap">Jenis Kelamin</th>
+                    <th style="white-space: nowrap">Status Usia</th>
+                    <th style="white-space: nowrap">Status Input</th>
+                    <th>Pendaftaran</th>
+                    <th>Kehadiran</th>
+                    <th>Pemeriksaan</th>
+                    <th>P.Mandiri</th>
+                    <th>Rapor</th>
+                    <th>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody id="tBodyAktifDataIndividu">
+                  <!-- Data individu akan dimasukkan lewat JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ==================== PANEL SEKOLAH ==================== -->
+          <div
+            class="tab-pane fade"
+            id="panel-sekolah"
+            role="tabpanel"
+            aria-labelledby="tab-sekolah"
+          >
+            <button
+              id="openDataPreparationSekolah"
+              class="btn btn-primary w-100 mt-2 mb-2"
+            >
+              Persiapan Data Sekolah
+            </button>
+
+            <!-- Mode sekolah tidak butuh tanggal pemeriksaan -->
+            <div class="alert alert-info py-2">
+              ℹ️ Mode Sekolah tidak memerlukan pengisian tanggal pemeriksaan.
+            </div>
+
+            <hr />
+            <button
+              id="btnRefreshSekolah"
+              class="btn btn-primary btn-sm w-100 mt-2 mb-1"
+            >
+              Refresh Data
+            </button>
+
+            <div
+              class="table-responsive hide-on-minimized"
+              style="max-height: 400px; overflow-y: auto; overflow-x: auto"
+            >
+              <table
+                class="table table-bordered table-striped table-sm table-compact text-nowrap"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>Aksi</th>
+                    <th>Validitas</th>
+                    <th>No</th>
+                    <th>NIK</th>
+                    <th>Nama</th>
+                    <th style="white-space: nowrap">Nama Sekolah</th>
+                    <th style="white-space: nowrap">Jenjang/Kelas</th>
+                    <th style="white-space: nowrap">Tgl Lahir</th>
+                    <th style="white-space: nowrap">Jenis Kelamin</th>
+                    <th style="white-space: nowrap">Status Usia</th>
+                    <th style="white-space: nowrap">Status Input</th>
+                    <th>Pendaftaran</th>
+                    <th>Kehadiran</th>
+                    <th>Pemeriksaan</th>
+                    <th>P.Mandiri</th>
+                    <th>Rapor</th>
+                    <th>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody id="tBodyAktifDataSekolah">
+                  <!-- Data sekolah akan dimasukkan lewat JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== RINGKASAN (SHARED) ==================== -->
+        <div class="accordion accordion-flush my-2" id="accordionSummary">
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingSummary">
+              <button
+                class="accordion-button py-2 px-3 collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseSummary"
+                aria-expanded="false"
+                aria-controls="collapseSummary"
+                style="font-size: 0.9rem"
+              >
+                <i class="bi bi-list-check me-2"></i>
+                Ringkasan
+              </button>
+            </h2>
+
+            <div
+              id="collapseSummary"
+              class="accordion-collapse collapse"
+              aria-labelledby="headingSummary"
+              data-bs-parent="#accordionSummary"
+            >
+              <div class="accordion-body p-2">
+                <button
+                  id="btnRefreshSummary"
+                  class="btn btn-primary btn-sm w-100 mt-2 mb-1"
+                >
+                  Refresh Ringkasan
+                </button>
+                <div id="summary"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== RUN SETTINGS (SHARED) ==================== -->
+        <div class="mt-4">
+          <div class="p-3 border rounded bg-light mb-3">
+            <!-- Grup Utama -->
+            <div class="d-flex flex-wrap gap-3 mb-2">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input main-chk"
+                  type="checkbox"
+                  id="chkPendaftaran"
+                  data-field="pendaftaran"
+                />
+                <label
+                  class="form-check-label small fw-bold"
+                  for="chkPendaftaran"
+                  >Pendaftaran</label
+                >
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input main-chk"
+                  type="checkbox"
+                  id="chkKehadiran"
+                  data-field="kehadiran"
+                />
+                <label class="form-check-label small fw-bold" for="chkKehadiran"
+                  >Kehadiran</label
+                >
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input parent-chk"
+                  type="checkbox"
+                  id="chkPemeriksaan"
+                />
+                <label
+                  class="form-check-label small fw-bold"
+                  for="chkPemeriksaan"
+                  >Pemeriksaan</label
+                >
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input main-chk"
+                  type="checkbox"
+                  id="chkRapor"
+                  data-field="rapor"
+                />
+                <label class="form-check-label small fw-bold" for="chkRapor"
+                  >Rapor</label
+                >
+              </div>
+            </div>
+
+            <!-- Sub-Pemeriksaan -->
+            <div
+              id="subPemeriksaanGroup"
+              class="p-2 border rounded bg-white mt-3 shadow-sm"
+            >
+              <div class="mb-2 small fw-bold text-muted border-bottom pb-1">
+                Detail Pemeriksaan:
+              </div>
+              <div
+                id="checkboxPemeriksaanContainer"
+                class="d-flex flex-wrap gap-3"
+              >
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input sub-chk"
+                    type="checkbox"
+                    id="chkPemeriksaanMulai"
+                    data-subfield="mulai"
+                  />
+                  <label
+                    class="form-check-label small"
+                    for="chkPemeriksaanMulai"
+                    >Mulai</label
+                  >
+                </div>
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input sub-chk"
+                    type="checkbox"
+                    id="chkPemeriksaanMandiri"
+                    data-subfield="mandiri"
+                  />
+                  <label
+                    class="form-check-label small"
+                    for="chkPemeriksaanMandiri"
+                    >Mandiri</label
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="runProcessBtn" class="btn btn-success w-100">
+            <i class="bi bi-play-fill"></i> Jalankan Proses Terpilih
+          </button>
+        </div>
+
+        <!-- ==================== MESSAGES & LOADING ==================== -->
+        <div
+          id="parent-text-message"
+          class="alert alert-warning d-flex align-items-center d-none"
+          role="alert"
+        >
+          <svg
+            class="bi flex-shrink-0 me-2"
+            width="24"
+            height="24"
+            role="img"
+            aria-label="Warning:"
+          >
+            <use xlink:href="#exclamation-triangle-fill" />
+          </svg>
+          <div
+            id="text-message"
+            style="
+              max-height: 120px;
+              overflow-y: auto;
+              width: 100%;
+              word-break: break-word;
+            "
+          ></div>
+        </div>
+
+        <div
+          id="loading-spinner"
+          class="text-center mx-auto w-100"
+          style="display: none"
+        >
+          <p class="text-center">
+            ⚠️ Jangan tutup atau close window ini, proses sedang berjalan!
+          </p>
+          <div class="spinner-grow text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-secondary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-success" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-danger" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-warning" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-info" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="spinner-grow text-dark" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script src="scripts/constant.js"></script>
+    <script src="scripts/helper.js"></script>
+    <script src="scripts/robot-pendaftaran-individu.js"></script>
+    <script src="scripts/robot-pendaftaran-sekolah.js"></script>
+    <script src="scripts/robot-kehadiran-individu.js"></script>
+    <script src="scripts/robot-kehadiran-sekolah.js"></script>
+    <script src="scripts/robot-pemeriksaan.js"></script>
+    <script src="scripts/robot-pemeriksaan-mandiri.js"></script>
+    <script src="scripts/panel.js"></script>
+  </body>
+</html>

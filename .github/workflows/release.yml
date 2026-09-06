@@ -1,0 +1,84 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g., v1.0.0)"
+        required: true
+        default: "v1.0.0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get Version
+        id: get_version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $version = $env:GITHUB_REF -replace 'refs/tags/', ''
+          } else {
+            $version = "${{ github.event.inputs.version }}"
+          }
+          # ✅ Gunakan GITHUB_OUTPUT bukan GITHUB_ENV
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $zipName = "ckg-auto-chrome-extensions.zip"
+
+          # Exclude files yang tidak perlu
+          $exclude = @(".git", ".github", "*.zip", "*.log")
+
+          # Buat temporary folder
+          $tempFolder = "release_temp"
+          New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
+
+          # Copy file yang diperlukan
+          Get-ChildItem -Path . -Force | Where-Object {
+            $item = $_
+            -not ($exclude | Where-Object { $item.Name -like $_ })
+          } | ForEach-Object {
+            Copy-Item $_.FullName "$tempFolder\" -Recurse -Force
+          }
+
+          # Create ZIP
+          Compress-Archive -Path "$tempFolder\*" -DestinationPath $zipName -Force
+
+          # Cleanup
+          Remove-Item $tempFolder -Recurse -Force
+
+          echo "ZIP created: $zipName"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          # ✅ Gunakan steps.get_version.outputs.version
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body: |
+            Update ${{ steps.get_version.outputs.version }}
+
+            ## Perubahan:
+            - Update terbaru
+            - Perbaikan bug
+
+            ## Cara Update:
+            1. Download file ZIP
+            2. Extract ke folder extension
+            3. Reload extension di Chrome
+          files: |
+            ckg-auto-chrome-extensions.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "CKG Auto Extension",
+  "description": "Auto Extension for CKG Sehat Indonesiaku",
+  "version": "1.0.0",
+  "icons": {
+    "16": "images/ckg_automation.png",
+    "48": "images/ckg_automation.png",
+    "128": "images/ckg_automation.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "images/ckg_automation.png",
+      "48": "images/ckg_automation.png",
+      "128": "images/ckg_automation.png"
+    }
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+
+  "permissions": ["storage", "scripting", "activeTab", "tabs", "sidePanel"],
+
+  "host_permissions": [
+    "https://sehatindonesiaku.kemkes.go.id/*",
+    "https://form.kemkes.go.id/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sehatindonesiaku.kemkes.go.id/*",
+        "https://form.kemkes.go.id/*"
+      ],
+      "js": ["scripts/helper.js"]
+    }
+  ]
+}
