@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Diperbarui ke v4
 
       - name: Get Version
         id: get_version
@@ -28,7 +28,7 @@ jobs:
           } else {
             $version = "${{ github.event.inputs.version }}"
           }
-          # ✅ Gunakan GITHUB_OUTPUT bukan GITHUB_ENV
+          # Simpan output ke GITHUB_OUTPUT
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create ZIP
@@ -39,30 +39,30 @@ jobs:
           # Exclude files yang tidak perlu
           $exclude = @(".git", ".github", "*.zip", "*.log")
 
-          # Buat temporary folder
-          $tempFolder = "release_temp"
+          # Gunakan folder temporary di luar direktori kerja (misal RUNNER_TEMP)
+          $tempFolder = Join-Path $env:RUNNER_TEMP "release_temp"
           New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
 
-          # Copy file yang diperlukan
+          # Copy file yang diperlukan ke folder temp
           Get-ChildItem -Path . -Force | Where-Object {
             $item = $_
             -not ($exclude | Where-Object { $item.Name -like $_ })
           } | ForEach-Object {
-            Copy-Item $_.FullName "$tempFolder\" -Recurse -Force
+            $destination = Join-Path $tempFolder $_.Name
+            Copy-Item $_.FullName $destination -Recurse -Force
           }
 
-          # Create ZIP
+          # Create ZIP dari isi folder temp
           Compress-Archive -Path "$tempFolder\*" -DestinationPath $zipName -Force
 
           # Cleanup
           Remove-Item $tempFolder -Recurse -Force
 
-          echo "ZIP created: $zipName"
+          Write-Host "ZIP created: $zipName"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2 # Diperbarui ke v2
         with:
-          # ✅ Gunakan steps.get_version.outputs.version
           tag_name: ${{ steps.get_version.outputs.version }}
           name: Release ${{ steps.get_version.outputs.version }}
           body: |
