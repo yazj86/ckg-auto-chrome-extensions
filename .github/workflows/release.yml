@@ -11,13 +11,16 @@ on:
         required: true
         default: "v1.0.0"
 
+permissions:
+  contents: write   # Wajib agar bisa membuat release
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Diperbarui ke v4
+        uses: actions/checkout@v4
 
       - name: Get Version
         id: get_version
@@ -61,7 +64,7 @@ jobs:
           Write-Host "ZIP created: $zipName"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2 # Diperbarui ke v2
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
           name: Release ${{ steps.get_version.outputs.version }}
@@ -82,3 +85,5 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Opsional: untuk menghindari peringatan Node 20 deprecated
+          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
