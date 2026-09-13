@@ -201,53 +201,11 @@ async function runPendaftaranAutofillIndividu({
                         X_PATH.INPUT_NIK_PENDAFTARAN,
                       );
                       inputElementValue(input, inData.nik);
-                      // const btnCek = await waitForElementAsync(
-                      //   X_PATH.BTN_CEK_NIK_PENDAFTARAN,
-                      // );
-                      // clickElement(btnCek);
-                      // await sleepUntilLoaded(750, "Proses pencarian data", 20);
                     },
                   },
-                  // {
-                  //   name: "Check NIK System Status",
-                  //   shouldRun: () => !state.earlyExit,
-                  //   action: async () => {
-                  //     const checkNotFound = waitForElementAsync(
-                  //       X_PATH.POPUP_NIK_TIDAK_DITEMUKAN,
-                  //     ).then(() => "NOT_FOUND");
-                  //     const checkFound = waitForElementAsync(
-                  //       X_PATH.BTN_GUNAKAN_NIK,
-                  //     ).then(() => "FOUND");
-                  //     try {
-                  //       const status = await Promise.race([
-                  //         checkNotFound,
-                  //         checkFound,
-                  //       ]);
-                  //       if (status === "NOT_FOUND") {
-                  //         logStatus("3. NIK Belum Terdaftar!");
-                  //         state.nikFound = false;
-                  //       } else if (status === "FOUND") {
-                  //         logStatus("3. NIK Telah Terdaftar!");
-                  //         state.nikFound = true;
-                  //         const btn = await waitForElementAsync(
-                  //           X_PATH.BTN_GUNAKAN_NIK,
-                  //         );
-                  //         clickElement(btn);
-                  //       }
-                  //     } catch (err) {
-                  //       logStatus("3. Timeout: Status NIK tidak ditemukan!");
-                  //       state.earlyExit = {
-                  //         success: false,
-                  //         status: "TIMEOUT",
-                  //         message:
-                  //           "System timeout waiting for NIK validation response",
-                  //       };
-                  //     }
-                  //   },
-                  // },
                   {
                     name: "Handle Missing NIK (Manual Form Fill)",
-                    // shouldRun: () => !state.earlyExit && !state.nikFound,
+                    shouldRun: () => !state.earlyExit,
                     action: async () => {
                       logStatus("3.1. Mengisi data manual...");
                       const nameInput = await waitForElementAsync(
@@ -276,7 +234,7 @@ async function runPendaftaranAutofillIndividu({
                   },
                   {
                     name: "Handle Guardian (Wali) Rules based on Age",
-                    // shouldRun: () => !state.earlyExit && !state.nikFound,
+                    shouldRun: () => !state.earlyExit,
                     action: async () => {
                       if (isOver60Years(inData.tgl_lahir)) {
                         logStatus("3.2. Checkbox tanpa wali...");
@@ -486,7 +444,8 @@ async function runPendaftaranAutofillIndividu({
                           await waitForElementAsync(
                             `//div[text()='${inData.status_perkawinan || defData.status_perkawinan}']/ancestor::div[contains(@class,'cursor-pointer')]`,
                           );
-                        clickElement(statusPernikahanOption);
+                        forceClick(statusPernikahanOption);
+                        await sleep(500);
                       } catch (err) {
                         console.warn("Ignore existing status pernikahan");
                       }

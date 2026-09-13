@@ -598,7 +598,8 @@ async function runPendaftaranAutofillSekolah({ aktifData, defData, url }) {
                           await waitForElementAsync(
                             `//div[text()='${inData.status_perkawinan || defData.status_perkawinan}']/ancestor::div[contains(@class,'cursor-pointer')]`,
                           );
-                        clickElement(statusPernikahanOption);
+                        forceClick(statusPernikahanOption);
+                        await sleep(500);
                       } catch (e) {
                         logStatus("⚠️ Gagal memilih status pernikahan");
                       }
