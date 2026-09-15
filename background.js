@@ -1,3 +1,5 @@
+importScripts("scripts/pemeriksaan-mandiri.background.js");
+
 // Set side panel behavior on startup and installation
 chrome.runtime.onStartup.addListener(() => {
   chrome.sidePanel

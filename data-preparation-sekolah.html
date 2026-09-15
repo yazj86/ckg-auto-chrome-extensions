@@ -7,487 +7,1042 @@
     <script src="lib/bootstrap.bundle.min.js"></script>
     <script src="lib/sweetalert2.js"></script>
     <script src="lib/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/sweetalert-theme.css" />
+
+    <!-- ============================================================
+         PANEL DATA STYLESHEET (self-contained)
+         ============================================================ -->
+    <style>
+      /* ---------- Design Tokens ---------- */
+      :root {
+        --brand: #0f7f8c;
+        --brand-dark: #0a5a63;
+        --brand-soft: #e8f5f7;
+        --brand-ring: rgba(15, 127, 140, 0.18);
+        --ink: #1e293b;
+        --ink-soft: #475569;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --surface: #ffffff;
+        --bg: #eef2f7;
+        --radius-lg: 16px;
+        --radius-md: 12px;
+        --radius-sm: 10px;
+        --shadow-sm: 0 1px 2px rgba(15, 35, 60, 0.06);
+        --shadow-md: 0 6px 18px rgba(15, 35, 60, 0.08);
+        --shadow-lg: 0 18px 45px rgba(15, 35, 60, 0.14);
+      }
+
+      /* ---------- Base ---------- */
+      body {
+        font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+          Arial, sans-serif;
+        color: var(--ink);
+        background-color: var(--bg);
+        background-image: radial-gradient(
+            900px 500px at 0% -10%,
+            #d7ecf0 0%,
+            transparent 60%
+          ),
+          radial-gradient(700px 420px at 110% 0%, #e3e8f8 0%, transparent 55%);
+        background-attachment: fixed;
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---------- Shell Card ---------- */
+      .app-card {
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+      }
+
+      /* ---------- Header ---------- */
+      .app-header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 20px;
+        color: #fff;
+        background: linear-gradient(
+          135deg,
+          #128e9c 0%,
+          #0f7f8c 40%,
+          #0a5a63 100%
+        );
+        overflow: hidden;
+      }
+      .app-header::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          420px 200px at 88% -40%,
+          rgba(255, 255, 255, 0.28),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .app-header-icon {
+        position: relative;
+        z-index: 1;
+        flex: 0 0 auto;
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+        padding: 6px;
+      }
+      .app-header-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .app-header-text {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+      }
+      .app-header-text h1 {
+        margin: 0;
+        font-size: 1.12rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        line-height: 1.25;
+      }
+      .app-header-text p {
+        margin: 3px 0 0;
+        font-size: 0.74rem;
+        color: rgba(255, 255, 255, 0.82);
+        letter-spacing: 0.2px;
+      }
+
+      /* ---------- Settings Card (section) ---------- */
+      .settings-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: linear-gradient(180deg, #fbfdfe 0%, #f6fafb 100%);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+      }
+      .settings-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+      .settings-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        line-height: 1.2;
+      }
+      .settings-body {
+        padding: 14px 14px 16px;
+      }
+
+      /* ---------- Step Icon (with PNG) ---------- */
+      .step-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        flex: 0 0 auto;
+        background: linear-gradient(135deg, #e8f5f7 0%, #d4ebef 100%);
+        border: 1px solid #c7e0e4;
+        box-shadow: 0 2px 6px rgba(15, 127, 140, 0.12);
+        padding: 5px;
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+      }
+      .step-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .settings-head:hover .step-icon {
+        transform: scale(1.06);
+        box-shadow: 0 4px 10px rgba(15, 127, 140, 0.22);
+      }
+
+      /* ---------- Section Bar (Aktif Data) ---------- */
+      .section-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+      .section-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        flex: 0 0 auto;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.28);
+        padding: 5px;
+      }
+      .section-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .section-title {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: var(--ink);
+        letter-spacing: 0.2px;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+        animation: pulseDot 1.8s ease-in-out infinite;
+      }
+      @keyframes pulseDot {
+        0%,
+        100% {
+          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.06);
+        }
+      }
+
+      /* ---------- Info Note ---------- */
+      .info-note {
+        padding: 0.6rem 0.85rem;
+        border: 1px solid #bae6fd;
+        border-left: 4px solid #0ea5e9;
+        border-radius: 10px;
+        background: #f0f9ff;
+        color: #075985;
+        font-size: 0.78rem;
+        line-height: 1.5;
+      }
+
+      /* ---------- Field Card (upload) ---------- */
+      .field-card {
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: linear-gradient(180deg, #fbfdfe 0%, #f4f9fa 100%);
+      }
+      .field-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+      .field-title {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+      .field-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        border-radius: 999px;
+        color: #b42318;
+        background: #fee4e2;
+        border: 1px solid #fecdca;
+      }
+
+      /* ---------- Sub-title ---------- */
+      .sub-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: var(--brand-dark);
+        padding-bottom: 6px;
+        border-bottom: 1px dashed var(--line);
+      }
+
+      /* ---------- Mini Field ---------- */
+      .mini-field {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+        height: 100%;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      .mini-field:hover {
+        border-color: #c9d6dd;
+        box-shadow: 0 2px 6px rgba(15, 35, 60, 0.08);
+      }
+      .mini-label {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .mini-field .form-control,
+      .mini-field .form-select {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 8px;
+        border-color: var(--line);
+      }
+      .mini-field .form-control:focus,
+      .mini-field .form-select:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 0.2rem var(--brand-ring);
+      }
+      .mini-field .input-group-text {
+        background: #f8fafc;
+        border-color: var(--line);
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-right: 0;
+        border-radius: 8px 0 0 8px;
+      }
+      .mini-field .input-group .form-control {
+        border-left: 0;
+        border-radius: 0 8px 8px 0;
+      }
+      .mini-field .input-group:focus-within .input-group-text {
+        border-color: var(--brand);
+        color: var(--brand-dark);
+      }
+
+      /* ---------- Horizontal scroll ---------- */
+      .mapping-scroll::-webkit-scrollbar {
+        height: 8px;
+      }
+      .mapping-scroll::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 8px;
+      }
+      .mapping-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 8px;
+      }
+      .mapping-scroll::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* ---------- Buttons ---------- */
+      .btn {
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        font-size: 0.86rem;
+        transition: all 0.16s ease;
+      }
+      .btn-primary {
+        background-color: var(--brand);
+        border-color: var(--brand);
+        box-shadow: 0 4px 12px rgba(15, 127, 140, 0.24);
+      }
+      .btn-primary:hover,
+      .btn-primary:focus,
+      .btn-primary:active {
+        background-color: var(--brand-dark) !important;
+        border-color: var(--brand-dark) !important;
+      }
+      .btn-success {
+        background-color: #0f8a5f;
+        border-color: #0f8a5f;
+        box-shadow: 0 4px 14px rgba(15, 138, 95, 0.26);
+      }
+      .btn-success:hover,
+      .btn-success:focus {
+        background-color: #0b7150 !important;
+        border-color: #0b7150 !important;
+      }
+      .btn-danger {
+        background-color: #dc2626;
+        border-color: #dc2626;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.22);
+      }
+      .btn-danger:hover,
+      .btn-danger:focus {
+        background-color: #b91c1c !important;
+        border-color: #b91c1c !important;
+      }
+      .btn-action {
+        padding: 0.65rem 1rem;
+        font-size: 0.9rem;
+      }
+
+      /* ---------- Toggle Pill ---------- */
+      .toggle-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0.75rem 0.35rem 0.55rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #f8fafc;
+        margin: 0;
+        cursor: pointer;
+        transition: all 0.16s ease;
+      }
+      .toggle-pill:hover {
+        border-color: #c9d6dd;
+      }
+      .toggle-pill .form-check-input {
+        margin: 0;
+        cursor: pointer;
+        float: none;
+      }
+      .toggle-pill .form-check-label {
+        cursor: pointer;
+        margin: 0;
+        color: var(--ink-soft);
+        user-select: none;
+      }
+      .toggle-pill:has(.form-check-input:checked) {
+        background: var(--brand-soft);
+        border-color: var(--brand);
+      }
+      .toggle-pill:has(.form-check-input:checked) .form-check-label {
+        color: var(--brand-dark);
+      }
+
+      /* ---------- Form controls ---------- */
+      .form-select,
+      .form-control {
+        border-radius: var(--radius-sm);
+        border-color: var(--line);
+        font-size: 0.86rem;
+      }
+      .form-select:focus,
+      .form-control:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 0.2rem var(--brand-ring);
+      }
+      .form-check-input:checked {
+        background-color: var(--brand);
+        border-color: var(--brand);
+      }
+      .form-check-input:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 0.2rem var(--brand-ring);
+      }
+
+      /* ---------- Table ---------- */
+      .table-responsive {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+      }
+      .table-responsive::-webkit-scrollbar {
+        width: 9px;
+        height: 9px;
+      }
+      .table-responsive::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      .table-responsive::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 8px;
+        border: 2px solid #f1f5f9;
+      }
+      .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      .table {
+        margin-bottom: 0;
+      }
+      .table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background-color: #10323c !important;
+        color: #e6f4f6 !important;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 0.6rem 0.65rem;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        white-space: nowrap;
+      }
+      .table tbody td {
+        font-size: 0.78rem;
+        padding: 0.5rem 0.65rem;
+        vertical-align: middle;
+        border-color: #eef2f6;
+      }
+      .table tbody tr:nth-child(odd) {
+        background-color: #fbfdfe;
+      }
+      .table tbody tr:hover {
+        background-color: #eff9fa;
+      }
+
+      /* ---------- Responsive ---------- */
+      @media (max-width: 576px) {
+        .section-bar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .toggle-pill {
+          width: 100%;
+          justify-content: flex-start;
+        }
+      }
+    </style>
   </head>
 
   <body class="p-3 position-relative">
-<div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+    <div class="card app-card">
+      <!-- ==================== HEADER ==================== -->
+      <div class="app-header">
+        <div class="app-header-icon">
+          <img src="images/ckg_automation.png" alt="CKG Automation" />
+        </div>
+        <div class="app-header-text">
+          <h1>Data Preparations Sekolah</h1>
+          <p>Upload · Petakan · Simpan Data Peserta Didik</p>
+        </div>
+      </div>
+
       <div class="card-body p-4">
-        <!-- HEADER PANEL -->
-        <div
-          class="d-flex align-items-center gap-2 mb-4"
-          style="color: #118a9a; font-size: 1.35rem; font-weight: 600"
-        >
-          <img
-            src="images/ckg_automation.png"
-            alt="icon"
-            style="width: 32px; height: 32px; object-fit: contain"
-          />
-          <span>CKG Auto Data Preparations Sekolah</span>
-        </div>
-
-    <!-- Upload & Mapping Section -->
-    <div class="card mb-3 mt-1">
-      <div class="card-header bg-dark text-white">
-        1. Upload & Petakan Kolom Excel (Sekolah)
-      </div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label for="excelFileInput" class="form-label font-weight-bold">
-            Pilih File Excel (.xlsx / .xls)
-          </label>
-          <input
-            class="form-control"
-            type="file"
-            id="excelFileInput"
-            accept=".xlsx, .xls"
-          />
-        </div>
-
-        <div id="mappingSection" class="d-none">
-          <h6 class="text-secondary border-bottom pb-2">
-            Sesuaikan Pemetaan Kolom jika Belum Sesuai:
-          </h6>
-          <div
-            id="mappingDropdownsContainer"
-            class="d-flex flex-nowrap overflow-auto pb-2 mb-3"
-          >
-            <!-- Dropdown select akan digenerate otomatis lewat JS di sini -->
-          </div>
-          <div class="w-100 text-center">
-            <button
-              id="processAndSaveBtn"
-              class="btn btn-primary w-100 font-weight-bold mx-auto"
-              style="max-width: 400px"
+        <!-- ==================== STEP 1: UPLOAD & MAPPING ==================== -->
+        <div class="settings-card mb-3">
+          <div class="settings-head">
+            <span class="step-icon">
+              <img src="images/ckg_automation.png" alt="Step 1" />
+            </span>
+            <span class="settings-title"
+              >Upload &amp; Petakan Kolom Excel (Sekolah)</span
             >
-              🚀 Gunakan & Simpan Data Sekolah
-            </button>
+          </div>
+
+          <div class="settings-body">
+            <div class="field-card mb-3">
+              <div class="field-head">
+                <label for="excelFileInput" class="field-title">
+                  Pilih File Excel (.xlsx / .xls)
+                </label>
+                <span class="field-badge">Wajib</span>
+              </div>
+              <input
+                class="form-control"
+                type="file"
+                id="excelFileInput"
+                accept=".xlsx, .xls"
+              />
+            </div>
+
+            <div id="mappingSection" class="d-none">
+              <div class="sub-title mb-2">
+                Sesuaikan Pemetaan Kolom Jika Belum Sesuai
+              </div>
+              <div
+                id="mappingDropdownsContainer"
+                class="d-flex flex-nowrap overflow-auto pb-2 mb-3 mapping-scroll"
+                style="gap: 8px"
+              >
+                <!-- Dropdown select akan digenerate otomatis lewat JS di sini -->
+              </div>
+              <div class="w-100 text-center">
+                <button
+                  id="processAndSaveBtn"
+                  class="btn btn-primary btn-action mx-auto"
+                  style="max-width: 420px; width: 100%"
+                >
+                  🚀 Gunakan &amp; Simpan Data Sekolah
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Default Data Sekolah -->
-    <div class="card mb-3 mt-1">
-      <div class="card-header bg-dark text-white">2. Data Default Sekolah</div>
-      <div class="card-body">
-        <small>
-          Data default akan digunakan ketika data di excel kosong!
-        </small>
+        <!-- ==================== STEP 2: DATA DEFAULT SEKOLAH ==================== -->
+        <div class="settings-card mb-3">
+          <div class="settings-head">
+            <span class="step-icon">
+              <img src="images/ckg_automation.png" alt="Step 2" />
+            </span>
+            <span class="settings-title">Data Default Sekolah</span>
+          </div>
+
+          <div class="settings-body">
+            <div class="info-note mb-3">
+              ℹ️ Data default akan digunakan ketika data di Excel kosong.
+            </div>
+
+            <div
+              id="defaultValuesContainer"
+              class="d-flex flex-nowrap overflow-auto pb-2 mb-3 mapping-scroll"
+              style="gap: 8px"
+            >
+              <!-- Field khusus sekolah -->
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="nama_sekolah"
+                    class="mini-label"
+                    title="Default Nama Sekolah"
+                    >Default Nama Sekolah</label
+                  >
+                  <input
+                    type="text"
+                    id="nama_sekolah"
+                    class="form-control form-control-sm"
+                    placeholder="Nama Sekolah"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="jenjang_pendidikan"
+                    class="mini-label"
+                    title="Default Jenjang/Kelas"
+                    >Default Jenjang/Kelas</label
+                  >
+                  <select
+                    id="jenjang_pendidikan"
+                    class="form-select form-select-sm"
+                  >
+                    <option value="">-- Pilih Kelas --</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Field umum -->
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label for="no_hp" class="mini-label" title="Default No. HP"
+                    >Default No. HP</label
+                  >
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">62</span>
+                    <input
+                      type="number"
+                      id="no_hp"
+                      class="form-control"
+                      placeholder="8123..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label for="alamat" class="mini-label" title="Default Alamat"
+                    >Default Alamat</label
+                  >
+                  <input
+                    type="text"
+                    id="alamat"
+                    class="form-control form-control-sm"
+                    placeholder="Nama jalan, RT/RW"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="provinsi"
+                    class="mini-label"
+                    title="Default Provinsi"
+                    >Default Provinsi</label
+                  >
+                  <input
+                    type="text"
+                    id="provinsi"
+                    class="form-control form-control-sm"
+                    placeholder="Provinsi"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="kab_kota"
+                    class="mini-label"
+                    title="Default Kabupaten / Kota"
+                    >Default Kabupaten / Kota</label
+                  >
+                  <input
+                    type="text"
+                    id="kab_kota"
+                    class="form-control form-control-sm"
+                    placeholder="Kab / Kota"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="kecamatan"
+                    class="mini-label"
+                    title="Default Kecamatan"
+                    >Default Kecamatan</label
+                  >
+                  <input
+                    type="text"
+                    id="kecamatan"
+                    class="form-control form-control-sm"
+                    placeholder="Kecamatan"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="kel_desa"
+                    class="mini-label"
+                    title="Default Kelurahan / Desa"
+                    >Default Kelurahan / Desa</label
+                  >
+                  <input
+                    type="text"
+                    id="kel_desa"
+                    class="form-control form-control-sm"
+                    placeholder="Kel / Desa"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="berat_badan"
+                    class="mini-label"
+                    title="Default Berat Badan (kg)"
+                    >Default Berat Badan (kg)</label
+                  >
+                  <input
+                    type="number"
+                    id="berat_badan"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="tinggi_badan"
+                    class="mini-label"
+                    title="Default Tinggi Badan (cm)"
+                    >Default Tinggi Badan (cm)</label
+                  >
+                  <input
+                    type="number"
+                    id="tinggi_badan"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="lingkar_perut"
+                    class="mini-label"
+                    title="Default Lingkar Perut (cm)"
+                    >Default Lingkar Perut (cm)</label
+                  >
+                  <input
+                    type="number"
+                    id="lingkar_perut"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label for="td_sistol" class="mini-label" title="Sistolik"
+                    >Default TD Sistolik (mmHg)</label
+                  >
+                  <input
+                    type="number"
+                    id="td_sistol"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label for="td_diastol" class="mini-label" title="Diastol"
+                    >Default TD Diastol (mmHg)</label
+                  >
+                  <input
+                    type="number"
+                    id="td_diastol"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="pemeriksaan_gula"
+                    class="mini-label"
+                    title="Gula Darah Sewaktu (GDS)"
+                    >Default GDS (mg/dL)</label
+                  >
+                  <input
+                    type="number"
+                    id="pemeriksaan_gula"
+                    class="form-control form-control-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="nik_wali"
+                    class="mini-label"
+                    title="Default NIK Wali"
+                    >Default NIK Wali</label
+                  >
+                  <input
+                    type="text"
+                    id="nik_wali"
+                    class="form-control form-control-sm"
+                    placeholder="NIK Wali"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="nama_wali"
+                    class="mini-label"
+                    title="Default Nama Wali"
+                    >Default Nama Wali</label
+                  >
+                  <input
+                    type="text"
+                    id="nama_wali"
+                    class="form-control form-control-sm"
+                    placeholder="Nama Wali"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="tgl_lahir_wali"
+                    class="mini-label"
+                    title="Default Tgl. Lahir Wali"
+                    >Default Tgl. Lahir Wali</label
+                  >
+                  <input
+                    type="text"
+                    id="tgl_lahir_wali"
+                    class="form-control form-control-sm"
+                    placeholder="DD-MM-YYYY"
+                  />
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="jenis_kelamin_wali"
+                    class="mini-label"
+                    title="Default Jenis Kelamin Wali"
+                    >Default Jenis Kelamin Wali</label
+                  >
+                  <select
+                    id="jenis_kelamin_wali"
+                    class="form-select form-select-sm"
+                  >
+                    <option value="">-- Pilih Jenis Kelamin --</option>
+                    <option value="L">Laki-laki (L)</option>
+                    <option value="P">Perempuan (P)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="flex-shrink-0" style="width: 220px">
+                <div class="mini-field">
+                  <label
+                    for="no_hp_wali"
+                    class="mini-label"
+                    title="Default No. HP Wali"
+                    >Default No. HP Wali</label
+                  >
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">62</span>
+                    <input
+                      type="number"
+                      id="no_hp_wali"
+                      class="form-control"
+                      placeholder="8...."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="w-100 text-center">
+              <button
+                id="btnSaveDefault"
+                class="btn btn-primary btn-action mx-auto"
+                style="max-width: 420px; width: 100%"
+              >
+                💾 Simpan Data Default Sekolah
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STEP 3: DATA DEFAULT PEMERIKSAAN ==================== -->
+        <div class="settings-card mb-3">
+          <div class="settings-head">
+            <span class="step-icon">
+              <img src="images/ckg_automation.png" alt="Step 3" />
+            </span>
+            <span class="settings-title">Data Default Pemeriksaan</span>
+          </div>
+
+          <div class="settings-body">
+            <div class="info-note mb-3">
+              ℹ️ Automation belum support data pemeriksaan dari Excel, sehingga
+              akan diisi data default di bawah ini.
+            </div>
+
+            <div
+              id="defaultValuesPemeriksaanContainer"
+              class="d-flex flex-nowrap overflow-auto pb-2 mb-3 mapping-scroll"
+              style="gap: 8px"
+            >
+              <!-- Element dinamis di-inject di sini melalui JS -->
+            </div>
+
+            <div class="w-100 text-center">
+              <button
+                id="btnSaveDefaultPemeriksaan"
+                class="btn btn-primary btn-action mx-auto"
+                style="max-width: 420px; width: 100%"
+              >
+                💾 Simpan Data Default Pemeriksaan
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== AKTIF DATA ==================== -->
+        <div class="section-bar mb-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="section-icon">
+              <img src="images/ckg_automation.png" alt="Database" />
+            </span>
+            <span class="section-title">Aktif Data — Sekolah</span>
+            <span class="status-dot"></span>
+          </div>
+          <div class="form-check form-switch mb-0 toggle-pill">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="toggleDefaultData"
+              checked
+            />
+            <label
+              class="form-check-label"
+              for="toggleDefaultData"
+              style="font-size: 0.78rem; font-weight: 600"
+            >
+              Tampilkan Data Default
+            </label>
+          </div>
+        </div>
+
         <div
-          id="defaultValuesContainer"
-          class="d-flex flex-nowrap overflow-auto pb-2 mb-3"
+          class="table-responsive mb-3"
+          style="max-height: 400px; overflow-y: auto; overflow-x: auto"
         >
-          <!-- Field khusus sekolah -->
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="nama_sekolah"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Nama Sekolah"
-                >Default Nama Sekolah</label
-              >
-              <input
-                type="text"
-                id="nama_sekolah"
-                class="form-control form-control-sm"
-                placeholder="Nama Sekolah"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="jenjang_pendidikan"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Jenjang/Kelas"
-                >Default Jenjang/Kelas</label
-              >
-              <select
-                id="jenjang_pendidikan"
-                class="form-select form-select-sm"
-              >
-                <option value="">-- Pilih Kelas --</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Field umum (sama dengan individu) -->
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="no_hp"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default No. HP"
-                >Default No. HP</label
-              >
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white border-end-0">62</span>
-                <input
-                  type="number"
-                  id="no_hp"
-                  class="form-control"
-                  placeholder="8123..."
-                />
-              </div>
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="alamat"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Alamat"
-                >Default Alamat</label
-              >
-              <input
-                type="text"
-                id="alamat"
-                class="form-control form-control-sm"
-                placeholder="Nama jalan, RT/RW"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="provinsi"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Provinsi"
-                >Default Provinsi</label
-              >
-              <input
-                type="text"
-                id="provinsi"
-                class="form-control form-control-sm"
-                placeholder="Provinsi"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="kab_kota"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Kabupaten / Kota"
-                >Default Kabupaten / Kota</label
-              >
-              <input
-                type="text"
-                id="kab_kota"
-                class="form-control form-control-sm"
-                placeholder="Kab / Kota"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="kecamatan"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Kecamatan"
-                >Default Kecamatan</label
-              >
-              <input
-                type="text"
-                id="kecamatan"
-                class="form-control form-control-sm"
-                placeholder="Kecamatan"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="kel_desa"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Kelurahan / Desa"
-                >Default Kelurahan / Desa</label
-              >
-              <input
-                type="text"
-                id="kel_desa"
-                class="form-control form-control-sm"
-                placeholder="Kel / Desa"
-              />
-            </div>
-          </div>
-          <!-- Field lainnya sama seperti individu -->
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="berat_badan"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Berat Badan (kg)"
-                >Default Berat Badan (kg)</label
-              >
-              <input
-                type="number"
-                id="berat_badan"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="tinggi_badan"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Tinggi Badan (cm)"
-                >Default Tinggi Badan (cm)</label
-              >
-              <input
-                type="number"
-                id="tinggi_badan"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="lingkar_perut"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Lingkar Perut (cm)"
-                >Default Lingkar Perut (cm)</label
-              >
-              <input
-                type="number"
-                id="lingkar_perut"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="td_sistol"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Sistolik"
-                >Default TD Sistolik (mmHg)</label
-              >
-              <input
-                type="number"
-                id="td_sistol"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="td_diastol"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Diastol"
-                >Default TD Diastol (mmHg)</label
-              >
-              <input
-                type="number"
-                id="td_diastol"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="pemeriksaan_gula"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Gula Darah Sewaktu (GDS)"
-                >Default Gula Darah Sewaktu (GDS) - (mg/dL)</label
-              >
-              <input
-                type="number"
-                id="pemeriksaan_gula"
-                class="form-control form-control-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="nik_wali"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default NIK Wali"
-                >Default NIK Wali</label
-              >
-              <input
-                type="text"
-                id="nik_wali"
-                class="form-control form-control-sm"
-                placeholder="NIK Wali"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="nama_wali"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Nama Wali"
-                >Default Nama Wali</label
-              >
-              <input
-                type="text"
-                id="nama_wali"
-                class="form-control form-control-sm"
-                placeholder="Nama Wali"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="tgl_lahir_wali"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Tgl. Lahir Wali"
-                >Default Tgl. Lahir Wali</label
-              >
-              <input
-                type="text"
-                id="tgl_lahir_wali"
-                class="form-control form-control-sm"
-                placeholder="DD-MM-YYYY"
-              />
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="jenis_kelamin_wali"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default Jenis Kelamin Wali"
-                >Default Jenis Kelamin Wali</label
-              >
-              <select
-                id="jenis_kelamin_wali"
-                class="form-select form-select-sm"
-              >
-                <option value="">-- Pilih Jenis Kelamin --</option>
-                <option value="L">Laki-laki (L)</option>
-                <option value="P">Perempuan (P)</option>
-              </select>
-            </div>
-          </div>
-          <div class="flex-shrink-0 me-2" style="width: 220px">
-            <div class="form-group p-1 border rounded bg-light h-100">
-              <label
-                for="no_hp_wali"
-                class="form-label small text-truncate fw-bold mb-1 d-block"
-                title="Default No. HP Wali"
-                >Default No. HP Wali</label
-              >
-              <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white border-end-0">62</span>
-                <input
-                  type="number"
-                  id="no_hp_wali"
-                  class="form-control"
-                  placeholder="8...."
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="w-100 text-center">
-          <button
-            id="btnSaveDefault"
-            class="btn btn-primary btn-sm w-100 font-weight-bold mx-auto"
-            style="max-width: 400px"
+          <table
+            class="table table-bordered table-striped table-sm table-compact text-nowrap"
           >
-            Simpan Data Default Sekolah
+            <thead class="table-dark">
+              <tr id="tableHeaderRow">
+                <!-- Header akan dirender dinamis berdasarkan dataSchema -->
+              </tr>
+            </thead>
+            <tbody id="dataBody">
+              <tr>
+                <td colspan="12" class="text-center text-muted py-4">
+                  📭 Belum ada data aktif. Silakan unggah file Excel.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex gap-2 mb-2">
+          <button id="btnDownloadExcel" class="btn btn-success flex-grow-1">
+            ⬇ Download File Excel
+          </button>
+          <button
+            id="btnClearAktifData"
+            class="btn btn-danger"
+            style="min-width: 130px"
+          >
+            🗑 Hapus Data
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Data Default Pemeriksaan -->
-    <div class="card mb-3 mt-1">
-      <div class="card-header bg-dark text-white">
-        3. Data Default Pemeriksaan
-      </div>
-      <div class="card-body">
-        <small>
-          Saat ini Automation belum support data pemeriksaan yang diambil dari
-          excel, sehingga akan diisi data default pemeriksaan di bawah.
-        </small>
-        <div
-          id="defaultValuesPemeriksaanContainer"
-          class="d-flex flex-nowrap overflow-auto pb-2 mb-3"
-          style="gap: 4px"
-        >
-          <!-- Element dinamis di-inject di sini melalui JS -->
-        </div>
-
-        <div class="w-100 text-center">
-          <button
-            id="btnSaveDefaultPemeriksaan"
-            class="btn btn-primary btn-sm w-100 font-weight-bold mx-auto"
-            style="max-width: 400px"
-          >
-            Simpan Data Default Pemeriksaan
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Aktif Data -->
-    <div class="d-flex align-items-center gap-3 mb-2">
-      <h5 class="text-success mb-0">Aktif Data - Sekolah</h5>
-      <div class="form-check form-switch mb-0">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          id="toggleDefaultData"
-          checked
-        />
-        <label
-          class="form-check-label small fw-bold text-secondary"
-          for="toggleDefaultData"
-        >
-          Tampilkan Data Default
-        </label>
-      </div>
-    </div>
-
-    <div
-      class="table-responsive"
-      style="max-height: 400px; overflow-y: auto; overflow-x: auto"
-    >
-      <table
-        class="table table-bordered table-striped table-sm table-compact text-nowrap"
-      >
-        <thead class="table-dark">
-          <tr id="tableHeaderRow">
-            <!-- Header akan dirender dinamis berdasarkan dataSchema -->
-          </tr>
-        </thead>
-        <tbody id="dataBody">
-          <tr>
-            <td colspan="12" class="text-center text-muted">
-              Belum ada data aktif. Silakan unggah file Excel.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <hr />
-
-    <div class="d-flex gap-2 mb-2">
-      <button id="btnDownloadExcel" class="btn btn-success w-75">
-        Download File Excel
-      </button>
-      <button id="btnClearAktifData" class="btn btn-danger w-25">
-        Hapus Data
-      </button>
-    </div>
-
+    <!-- ==================== SCRIPTS ==================== -->
     <script src="scripts/constant.js"></script>
     <script src="scripts/helper.js"></script>
     <script src="scripts/data-preparation.js"></script>

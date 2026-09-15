@@ -1,15 +1,17 @@
 // ==================== ROBOT PEMERIKSAAN MANDIRI ====================
 
-async function runPemeriksaanMandiri(
-  iData,
-  mode = REGISTRATION_MODES.INDIVIDUAL,
-) {
+async function runPemeriksaanMandiri(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
   showPanelMessage(
     `📋 Mulai Pemeriksaan Mandiri untuk ${iData.no}-${iData.nik}-${iData.nama}`,
   );
 
-  const defData = getDefaultData(mode);
-  const url = getPelayananDetailPemeriksaanUrl(mode); // helper di constant/helper
+  // ✅ FIX: Default PEMERIKSAAN, bukan default peserta
+  const defData = getDefaultPemeriksaanData();
+
+  // ✅ URL string (helper handle mode)
+  const url = getPelayananDetailPemeriksaanUrl(mode);
+
+  const tgl_pemeriksaan = localStorage.getItem(LOCAL_STORAGE.TGL_PEMERIKSAAN);
 
   let result;
   try {
@@ -18,6 +20,7 @@ async function runPemeriksaanMandiri(
       defData,
       schema: pemeriksaanDataSchema,
       url,
+      tgl_pemeriksaan,
     });
   } catch (err) {
     console.error("Error di runPemeriksaanMandiriAutofill:", err);
@@ -44,14 +47,15 @@ async function runPemeriksaanMandiri(
     iData.pemeriksaan_mandiri = "OK";
     iData.status_input = result.status;
     iData.keterangan = result.message;
+  } else if (result.status === "SKIPPED") {
+    iData.pemeriksaan_mandiri = "LEWATI";
+    iData.keterangan = result.message;
+  } else if (result.status === "ERROR" || result.status === "TIMEOUT") {
+    iData.keterangan = result.message;
   } else {
-    if (result.status === "ERROR" || result.status === "TIMEOUT") {
-      iData.keterangan = result.message;
-    } else {
-      iData.pemeriksaan_mandiri = "GAGAL";
-      iData.status_input = result.status;
-      iData.keterangan = result.message;
-    }
+    iData.pemeriksaan_mandiri = "GAGAL";
+    iData.status_input = result.status;
+    iData.keterangan = result.message;
   }
 
   await new Promise((r) => setTimeout(r, 1500));
@@ -63,33 +67,33 @@ async function runPemeriksaanMandiriAutofill({
   defData,
   schema,
   url,
+  tgl_pemeriksaan,
 }) {
-  // 1. Cari atau buat tab target
-  let targetTabId = null;
-  try {
-    const targetOrigin = new URL(url).origin;
-    const tabs = await chrome.tabs.query({});
-    const existingTab = tabs.find(
-      (t) => t.url && t.url.startsWith(targetOrigin),
-    );
+  // ✅ Pakai TAB AKTIF (asumsi user sudah di halaman detail)
+  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const targetTabId = tab.id;
 
-    if (existingTab) {
-      targetTabId = existingTab.id;
-      if (!existingTab.url.includes(url)) {
-        await chrome.tabs.update(targetTabId, { url, active: true });
-      } else {
-        await chrome.tabs.reload(targetTabId);
-      }
-    } else {
-      const newTab = await chrome.tabs.create({ url, active: true });
-      targetTabId = newTab.id;
-    }
-  } catch (err) {
-    console.error("Gagal membuat/menemukan tab target:", err);
-    throw err;
+  // ✅ Cek apakah tab aktif di URL pemeriksaan
+  const scriptResult = await chrome.scripting.executeScript({
+    target: { tabId: targetTabId },
+    args: [url],
+    func: (targetUrl) => {
+      const currentUrl = window.location.href;
+      return currentUrl.includes(targetUrl) || currentUrl === targetUrl;
+    },
+  });
+  const isPageMatch = scriptResult[0]?.result;
+
+  if (!isPageMatch) {
+    return {
+      success: false,
+      status: "ERROR",
+      message:
+        "Gagal: Halaman browser aktif tidak berada di URL pemeriksaan yang sesuai.",
+    };
   }
 
-  // 2. Fungsi mapping label ke key schema
+  // ✅ Buat mapping label → key (dari schema)
   function createLabelToKeyMapping(schema) {
     const mapping = {};
     Object.values(schema).forEach((item) => {
@@ -99,128 +103,152 @@ async function runPemeriksaanMandiriAutofill({
     });
     return mapping;
   }
-
   const LAYANAN_TO_SCHEMA_MAP = createLabelToKeyMapping(schema);
 
-  // 3. Jalankan pipeline
-  return new Promise((resolve, reject) => {
-    function panelMessageListener(request) {
+  // ✅ Pipeline pattern (background script handle navigasi)
+  return new Promise((resolve) => {
+    async function backgroundMessageListener(request, sender) {
       if (request.type === "ROBOT_STATUS") {
         appendPanelMessage(request.message);
       }
-    }
 
-    chrome.runtime.onMessage.addListener(panelMessageListener);
+      if (request.type === "PIPELINE_COMPLETE") {
+        chrome.runtime.onMessage.removeListener(backgroundMessageListener);
 
-    function listener(tabId, changeInfo) {
-      if (tabId === targetTabId && changeInfo.status === "complete") {
-        chrome.tabs.onUpdated.removeListener(listener);
-
-        // Eksekusi script di tab target
-        chrome.scripting.executeScript(
-          {
-            target: { tabId: targetTabId },
-            args: [aktifData, defData, schema, LAYANAN_TO_SCHEMA_MAP],
-            func: async (inData, defaultData, globalSchema, mapping) => {
-              try {
-                const logStatus = (msg) => {
-                  try {
-                    chrome.runtime.sendMessage({
-                      type: "ROBOT_STATUS",
-                      message: msg,
-                    });
-                  } catch (err) {
-                    console.error("Failed to send status message:", err);
-                  }
-                };
-
-                logStatus("Memindai tabel pemeriksaan mandiri...");
-
-                const rows = document.querySelectorAll(
-                  ".table-pemeriksaan-mandiri table tbody tr",
-                );
-                const queue = [];
-
-                rows.forEach((row) => {
-                  const cells = row.querySelectorAll("td");
-                  if (cells.length < 3) return;
-
-                  const statusImg = cells[1].querySelector("img");
-                  if (statusImg) {
-                    const imgSrc = statusImg.getAttribute("src") || "";
-                    if (
-                      imgSrc.includes("icon-success.svg") &&
-                      !imgSrc.includes("icon-success-gray.svg")
-                    ) {
-                      return; // sudah selesai
-                    }
-                  }
-
-                  const namaLayanan = cells[0].textContent.trim();
-                  const btnInput = cells[2].querySelector("button");
-                  const schemaKey = mapping[namaLayanan];
-
-                  if (
-                    btnInput &&
-                    btnInput.textContent.includes("Input Data") &&
-                    schemaKey
-                  ) {
-                    queue.push({
-                      nama: namaLayanan,
-                      key: schemaKey,
-                    });
-                  }
-                });
-
-                if (queue.length === 0) {
-                  // Tidak ada yang perlu diisi
-                  return {
-                    success: true,
-                    status: "-- ON PROGRESS --",
-                    message:
-                      "Semua formulir mandiri yang tersedia sudah terisi.",
-                  };
-                }
-
-                // Karena implementasi pengisian mandiri memerlukan navigasi antar halaman,
-                // kita kembalikan sukses untuk saat ini. Nanti bisa dikembangkan.
-                return {
-                  success: true,
-                  status: "-- ON PROGRESS --",
-                  message: `Terdapat ${queue.length} layanan mandiri yang perlu diisi.`,
-                };
-              } catch (err) {
-                return {
-                  success: false,
-                  status: "ERROR",
-                  message: err.message || String(err),
-                };
+        // Tunggu tab kembali ke halaman detail
+        async function waitForTab(tabId) {
+          const tab = await chrome.tabs.get(tabId);
+          if (
+            tab.status === "complete" &&
+            tab.url?.includes("pelayanan/detail")
+          ) {
+            return;
+          }
+          return new Promise((resolve) => {
+            function listener(updatedTabId, changeInfo, updatedTab) {
+              if (
+                updatedTabId === tabId &&
+                changeInfo.status === "complete" &&
+                updatedTab.url?.includes("pelayanan/detail")
+              ) {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
               }
-            },
-          },
-          (results) => {
-            chrome.runtime.onMessage.removeListener(panelMessageListener);
+            }
+            chrome.tabs.onUpdated.addListener(listener);
+          });
+        }
 
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-              return;
+        await waitForTab(targetTabId);
+
+        const [{ result }] = await chrome.scripting.executeScript({
+          target: { tabId: targetTabId },
+          func: async () => {
+            await new Promise((r) => setTimeout(r, 2000));
+            const rows = document.querySelectorAll(
+              ".table-pemeriksaan-mandiri table tbody tr",
+            );
+            let allComplete = true;
+            rows.forEach((row) => {
+              const cells = row.querySelectorAll("td");
+              if (cells.length < 3) return;
+              const statusImg = cells[1].querySelector("img");
+              if (statusImg) {
+                const imgSrc = statusImg.getAttribute("src") || "";
+                if (
+                  imgSrc.includes("icon-success.svg") &&
+                  !imgSrc.includes("icon-success-gray.svg")
+                ) {
+                  return;
+                }
+              }
+              allComplete = false;
+            });
+
+            if (allComplete) {
+              return {
+                success: true,
+                status: "-- ON PROGRESS --",
+                message:
+                  "Semua formulir mandiri yang tersedia berhasil di-autofill secara otomatis.",
+              };
+            } else {
+              return {
+                success: false,
+                status: "ERROR",
+                message: "Masih ada data yang belum terisi!",
+              };
             }
-            if (results && results[0] && results[0].error) {
-              reject(
-                new Error(results[0].error.message || String(results[0].error)),
-              );
-              return;
-            }
-            if (!results || !results[0] || results[0].result === undefined) {
-              reject(new Error("Hasil eksekusi skrip tidak valid"));
-              return;
-            }
-            resolve(results[0].result);
           },
-        );
+        });
+        resolve(result);
       }
     }
+    chrome.runtime.onMessage.addListener(backgroundMessageListener);
 
-    chrome.tabs.onUpdated.addListener(listener);
+    // ✅ Suntikkan script scanning tabel
+    chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      args: [aktifData, defData, schema, LAYANAN_TO_SCHEMA_MAP],
+      func: async (inData, defaultData, globalSchema, mapping) => {
+        const rows = document.querySelectorAll(
+          ".table-pemeriksaan-mandiri table tbody tr",
+        );
+        const queue = [];
+
+        rows.forEach((row) => {
+          const cells = row.querySelectorAll("td");
+          if (cells.length < 3) return;
+
+          const statusImg = cells[1].querySelector("img");
+          if (statusImg) {
+            const imgSrc = statusImg.getAttribute("src") || "";
+            if (
+              imgSrc.includes("icon-success.svg") &&
+              !imgSrc.includes("icon-success-gray.svg")
+            ) {
+              return; // sudah selesai
+            }
+          }
+
+          const namaLayananHTML = cells[0].textContent.trim();
+          const btnInput = cells[2].querySelector("button");
+          const schemaKey = mapping[namaLayananHTML];
+
+          if (
+            btnInput &&
+            btnInput.textContent.includes("Input Data") &&
+            schemaKey
+          ) {
+            const parentContainer =
+              btnInput.closest("div[id]") || btnInput.closest("tr");
+
+            if (!parentContainer.id) {
+              parentContainer.id =
+                "robot_row_" + Math.random().toString(36).substr(2, 9);
+            }
+
+            queue.push({
+              nama: namaLayananHTML,
+              key: schemaKey,
+              elementId: parentContainer.id,
+            });
+          }
+        });
+
+        if (queue.length === 0) {
+          return chrome.runtime.sendMessage({ type: "PIPELINE_COMPLETE" });
+        }
+
+        // Kirim ke background untuk pipeline
+        chrome.runtime.sendMessage({
+          type: "START_PIPELINE_FLOW",
+          queue: queue,
+          inData,
+          defData: defaultData,
+          schema: globalSchema,
+        });
+      },
+    });
   });
 }

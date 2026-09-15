@@ -819,6 +819,7 @@ const defaultRunSettingData = {
   pendaftaran: true,
   kehadiran: true,
   rapor: false,
+  ignorePrerequisites: false,
   pemeriksaan: {
     mulai: false,
     mandiri: false,

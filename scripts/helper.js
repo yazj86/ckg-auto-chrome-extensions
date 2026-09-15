@@ -71,37 +71,110 @@ function cleanNumberOnly(val) {
   return cleaned ? Number(cleaned) : null;
 }
 
+/**
+ * Konversi berbagai format tanggal ke DD-MM-YYYY.
+ * Handles:
+ *   - Excel serial number (44927)
+ *   - JavaScript Date object (dari SheetJS)
+ *   - String "DD-MM-YYYY" / "DD/MM/YYYY"
+ *   - String "YYYY-MM-DD" / "YYYY/MM/DD"
+ *   - String natural "15 Jan 1990" / "Jan 15, 1990"
+ * @returns {string|null} DD-MM-YYYY atau null kalau gagal
+ */
 function toDDMMYYYY(dateStr) {
-  if (!dateStr) return null;
+  // Guard: null / undefined / empty
+  if (dateStr === null || dateStr === undefined || dateStr === "") return null;
+
+  // 1. Excel serial number (contoh: 44927)
   if (!isNaN(dateStr) && Number(dateStr) > 2500) {
     const serial = Number(dateStr);
     const excelEpoch = Date.UTC(1899, 11, 30);
     const date = new Date(excelEpoch + serial * 86400000);
+    if (isNaN(date.getTime())) return null;
     const day = String(date.getUTCDate()).padStart(2, "0");
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     const year = date.getUTCFullYear();
     return `${day}-${month}-${year}`;
   }
-  let parts = dateStr.toString().split(/[-/]/);
-  if (!parts || parts.length < 3) return dateStr;
-  let day, month, year;
-  if (parts[0].length === 4) {
-    year = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    day = parseInt(parts[2], 10);
-  } else {
-    day = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    year = parseInt(parts[2], 10);
+
+  // 2. JavaScript Date object (dari SheetJS cellDates:true)
+  if (dateStr instanceof Date) {
+    if (isNaN(dateStr.getTime())) return null;
+    const day = String(dateStr.getDate()).padStart(2, "0");
+    const month = String(dateStr.getMonth() + 1).padStart(2, "0");
+    const year = dateStr.getFullYear();
+    return `${day}-${month}-${year}`;
   }
-  return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+
+  // 3. String parsing
+  const str = dateStr.toString().trim();
+  let day, month, year, match;
+
+  // 3a. Format DD-MM-YYYY atau DD/MM/YYYY
+  match = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(str);
+  if (match) {
+    day = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    year = parseInt(match[3], 10);
+    return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+  }
+
+  // 3b. Format YYYY-MM-DD atau YYYY/MM/DD
+  match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(str);
+  if (match) {
+    year = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    day = parseInt(match[3], 10);
+    return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+  }
+
+  // 3c. Fallback: coba Date.parse() — handle "Jan 15, 1990", "15 Jan 1990", dll.
+  const fallbackDate = new Date(str);
+  if (!isNaN(fallbackDate.getTime())) {
+    const d = String(fallbackDate.getDate()).padStart(2, "0");
+    const m = String(fallbackDate.getMonth() + 1).padStart(2, "0");
+    const y = fallbackDate.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+
+  // 4. Benar-benar gagal → return null
+  console.warn("[CKG] Gagal parse tanggal:", dateStr);
+  return null;
 }
 
+/**
+ * Parse string DD-MM-YYYY ke JavaScript Date.
+ * Selalu return Date valid atau Invalid Date (bukan throw).
+ * @returns {Date}
+ */
 function parseDDMMYYYY(dateStr) {
-  const [day, month, year] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day); // JS months = 0-11
+  if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
+
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return new Date(NaN);
+
+  const [day, month, year] = parts.map(Number);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(NaN);
+
+  const date = new Date(year, month - 1, day);
+
+  // Validasi range: pastikan Date yang dihasilkan benar-benar sesuai input
+  // (menangkap kasus seperti 31-02-2020 → JS auto-correct ke 02-03-2020)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return new Date(NaN);
+  }
+
+  return date;
 }
 
+/**
+ * Parse DD-MM-YYYY ke object { day, month, year, date }.
+ * @returns {object|null}
+ */
 function parseDateString(dateStr) {
   const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(dateStr);
   if (!match) {
@@ -340,12 +413,17 @@ function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
   });
 }
 
-// ==================== AGE & OCCUPATION HELPERS ====================
 // ==================== AGE HELPERS ====================
-function isUnder10Years(dateStr) {
-  if (!dateStr) return false;
+
+/**
+ * Hitung usia dalam tahun dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {number} usia tahun, atau -1 kalau invalid
+ */
+function calculateAgeInYears(dateStr) {
+  if (!dateStr) return -1;
   const birthDate = parseDDMMYYYY(dateStr);
-  if (isNaN(birthDate.getTime())) return false;
+  if (isNaN(birthDate.getTime())) return -1;
 
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -353,35 +431,22 @@ function isUnder10Years(dateStr) {
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  return age < 10;
+  return age;
+}
+
+function isUnder10Years(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 0 && age < 10;
 }
 
 function isUnder6Years(dateStr) {
-  if (!dateStr) return false;
-  const birthDate = parseDDMMYYYY(dateStr);
-  if (isNaN(birthDate.getTime())) return false;
-
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age < 6;
+  const age = calculateAgeInYears(dateStr);
+  return age >= 0 && age < 6;
 }
 
 function isOver60Years(dateStr) {
-  if (!dateStr) return false;
-  const birthDate = parseDDMMYYYY(dateStr);
-  if (isNaN(birthDate.getTime())) return false;
-
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age >= 60;
+  const age = calculateAgeInYears(dateStr);
+  return age >= 0 && age >= 60;
 }
 
 function setPekerjaanBasedOnAge(pekerjaan, status_usia) {
@@ -634,112 +699,56 @@ const X_PATH = {
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[2]/div[1]/label/input",
   CHECKBOX_NO_NIK:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[2]/div[2]/div/div/div[1]/div",
-  // INPUT_NAMA_LENGKAP:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[3]/div[1]/label/input",
 
   INPUT_NAMA_LENGKAP: "//input[@name='Nama']",
-  // INPUT_JENIS_KELAMIN:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[5]/div/div[2]/div[2]",
   INPUT_JENIS_KELAMIN:
     "//span[contains(text(),'Pilih jenis kelamin')]/parent::div",
-  // INPUT_JENIS_KELAMIN:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[5]/div/div[2]/div[2]",
   SELECT_JK_LK:
     "//div[text()='Laki-laki']/ancestor::div[contains(@class,'cursor-pointer')]",
-  // SELECT_JK_LK:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[5]/div/div[2]/div[3]/div/div[1]",
   SELECT_JK_PR:
     "//div[text()='Perempuan']/ancestor::div[contains(@class,'cursor-pointer')]",
-  // SELECT_JK_PR:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[5]/div/div[2]/div[3]/div/div[2]",
   INPUT_WA:
     "//label[contains(., 'No. Whatsapp Aktif')]//input[@name='Nomor Whatsapp']",
-  // INPUT_WA:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[6]/div[1]/label/div[2]/input",
   INPUT_ALAMAT: "//textarea[@id='detail-domisili']",
-  // INPUT_ALAMAT:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[9]/div/label/textarea",
   INPUT_TGL_LAHIR:
     "//div[@id='Tanggal Lahir']//div[contains(@class,'mx-input-wrapper')]",
-  // INPUT_TGL_LAHIR:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[4]/div/div[2]/div/div",
   INPUT_TGL_LAHIR_YEAR: "//button[contains(@class,'mx-btn-current-year')]",
-  // INPUT_TGL_LAHIR_YEAR: "/html/body/div[3]/div/div/div[1]/span/button[2]",
   INPUT_TGL_LAHIR_YEAR_TABLE: "//table[contains(@class,'mx-table-year')]",
-  // INPUT_TGL_LAHIR_YEAR_TABLE: "/html/body/div[3]/div/div/div[2]/table",
   INPUT_TGL_LAHIR_YEAR_BEFORE:
     "//button[contains(@class,'mx-btn-icon-double-left')]",
-  // INPUT_TGL_LAHIR_YEAR_BEFORE: "/html/body/div[3]/div/div/div[1]/button[1]",
   INPUT_TGL_LAHIR_MONTH_TABLE: "//table[contains(@class,'mx-table-month')]",
-  // INPUT_TGL_LAHIR_MONTH_TABLE: "/html/body/div[3]/div/div/div[2]/table",
   INPUT_TGL_LAHIR_DAY_TABLE: "//table[contains(@class,'mx-table-date')]",
-  // INPUT_TGL_LAHIR_DAY_TABLE: "/html/body/div[3]/div/div/div[2]/table",
   INPUT_PEKERJAAN:
     "//div[contains(@class,'cursor-pointer') and contains(text(),'Pilih pekerjaan')]",
-  // INPUT_PEKERJAAN:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[7]/div/div/div[2]/div/div[1]",
   INPUT_PEKERJAAN_PARENT:
     "//div[contains(@class,'modal-content')][.//div[text()='Pilih Pekerjaan']]",
-  // INPUT_PEKERJAAN_PARENT: "/html/body/div[3]/div[2]/div[2]/div",
   INPUT_NAMA_SEKOLAH:
-    "//div[contains(@class,'cursor-pointer') and contains(text(),'Pilih nama sekolah')]", // elemen pemicu dropdown (bisa input atau div)
+    "//div[contains(@class,'cursor-pointer') and contains(text(),'Pilih nama sekolah')]",
   INPUT_NAMA_SEKOLAH_PARENT:
     "//div[contains(@class,'modal-content')][.//div[text()='Pilih Sekolah']]",
   INPUT_JENJANG_PENDIDIKAN:
     "//div[contains(@class,'cursor-pointer') and contains(text(),'Pilih jenjang pendidikan')]",
   INPUT_JENJANG_PENDIDIKAN_PARENT:
     "//div[contains(@class,'modal-content')][.//div[text()='Pilih jenjang pendidikan']]",
-  //   CHECKBOX_DOMISILI:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[2]/div[6]/div[2]/div/div/div[5]/div/div/form[2]/div/div[7]/div[2]/div/div/div[1]/div",
   INPUT_ALAMAT_DOMISILI:
     "//div[contains(@class,'cursor-pointer') and contains(text(),'Pilih alamat domisili')]",
-  // INPUT_ALAMAT_DOMISILI:
-  //     "//div[contains(text(), 'Alamat Domisili')]/following-sibling::div/div[contains(@class, 'cursor-pointer')]",
-  // INPUT_ALAMAT_DOMISILI:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[1]/div[8]/div/div[2]/div",
   INPUT_ALAMAT_DOMISILI_PROVINSI_PARENT:
     "//div[text()='Daftar Provinsi']/parent::div",
-  // INPUT_ALAMAT_DOMISILI_PROVINSI_PARENT:
-  //     "/html/body/div[3]/div[2]/div[4]/div",
   INPUT_ALAMAT_DOMISILI_KAB_KOTA_PARENT:
     "//div[text()='Daftar Kabupaten/Kota']/parent::div",
-  // INPUT_ALAMAT_DOMISILI_KAB_KOTA_PARENT:
-  //     "/html/body/div[3]/div[2]/div[4]/div",
   INPUT_ALAMAT_DOMISILI_KECAMATAN_PARENT:
     "//div[text()='Daftar Kecamatan']/parent::div",
-  // INPUT_ALAMAT_DOMISILI_KECAMATAN_PARENT:
-  //     "/html/body/div[3]/div[2]/div[4]/div",
   INPUT_ALAMAT_DOMISILI_KEL_DESA_PARENT:
     "//div[text()='Daftar Kelurahan']/parent::div",
-  // INPUT_ALAMAT_DOMISILI_KEL_DESA_PARENT:
-  //     "/html/body/div[3]/div[2]/div[4]/div",
   INPUT_TGL_PEMERIKSAAN_PARENT:
     "//div[text()='Tanggal Pemeriksaan']/following::div[contains(@class,'shadow-gmail')][1]",
-  // INPUT_TGL_PEMERIKSAAN_PARENT:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[1]/div[2]/div[2]/div/div[2]/div[2]",
   BTN_SELANJUTNYA: "//button[.//div[normalize-space()='Selanjutnya']]",
-  // BTN_SELANJUTNYA:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[2]/div/button",
   BTN_LANJUT_KUOTA_HABIS: "//button[.//div[normalize-space()='Lanjut']]",
-  // BTN_LANJUT_KUOTA_HABIS:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div[2]/div[2]/div/div[3]/div[2]/button",
   BTN_PILIH_PESERTA: "//button[.//div[text()='Pilih']]",
-  // BTN_PILIH_PESERTA:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[3]/div[3]/div/table/tbody/tr/td[5]/div/button",
   BTN_DAFTAR_TANPA_NIK:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[3]/div[5]/div[2]/div[2]/button",
-  // BTN_DAFTAR_DENGAN_NIK:
-  //     "//button[.//div[text()='Daftarkan dengan NIK']]",
   BTN_DAFTAR_DENGAN_NIK:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[3]/div[5]/div[2]/div[1]/button",
-  // INPUT_NAMA_SEKOLAH_HADIR:
-  //   "//div[contains(@class,'cursor-pointer')][.//span[normalize-space()='Pilih sekolah']]",
-  // INPUT_NAMA_SEKOLAH_HADIR_PARENT:
-  //   "//div[contains(@class,'modal-content')][.//div[text()='Pilih Sekolah']]",
-  // INPUT_JENJANG_PENDIDIKAN_HADIR:
-  //   "//div[contains(@class,'cursor-pointer')][.//span[normalize-space()='Pilih kelas']]",
-  // INPUT_JENJANG_PENDIDIKAN_HADIR_PARENT:
-  //   "//div[contains(@class,'modal-content')][.//div[text()='Pilih kelas']]",
   MSG_POPUP_TERJADI_KESALAHAN:
     "//span[contains(., 'Terjadi kesalahan')]/ancestor::div[contains(@class,'p-2')]//div[contains(@class,'my-4')]//span",
   MSG_POPUP:
@@ -756,8 +765,6 @@ const X_PATH = {
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[2]/div[6]/div[2]/div/div[3]/div/button",
   SELECT_SEARCH:
     "//div[contains(@class, 'cursor-pointer')]//span[text()='Nomor Tiket']",
-  // SELECT_SEARCH_NAMA:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[1]/div[2]/div[1]/div/div[3]/div/div[3]",
   SELECT_SEARCH_NIK: "//div[contains(@style, 'transform')]//div[text()='NIK']",
   INPUT_SEARCH: "//input[@id='nik' and @placeholder='Masukkan NIK']",
   BTN_KONFIMASI_HADIR:
@@ -766,19 +773,13 @@ const X_PATH = {
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[4]/div[2]/div/div[4]/div[3]/div[1]/div/div[1]/div",
   BTN_HADIR_CKG:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[4]/div[2]/div/div[5]/div[2]/button",
-  // MSG_POPUP_BERHASIL_HADIR:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[4]/div[2]/div/div[1]/div[1]",
   MSG_POPUP_BERHASIL_HADIR: "//div[contains(., 'Berhasil Hadir')]",
-  // MSG_POPUP_BERHASIL_HADIR: "//div[contains(@class, 'shadow-gmail')]//div[contains(@class, 'flex-col')]//div[1]",
 
   CHECKBOX_TANPA_WALI: "//div[@class='check' and @id='noWali']",
-  // CHECKBOX_TANPA_WALI:
-  //     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[4]/div/div[1]/div/div[1]/div",
   BTN_DAFTAR_TANPA_WALI:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[5]/div[2]/button",
 
   // PEMERIKSAAN
-
   SELECT_SEARCH_PELAYANAN:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div[2]/div[1]/div/div[2]",
   SELECT_SEARCH_NAMA_PELAYANAN:
@@ -833,8 +834,8 @@ const X_PATH = {
   BTN_DAFTARKAN_DENGAN_NIK: "//button[contains(., 'Daftarkan dengan NIK')]",
   BTN_MULAI_PEMERIKSAAN_TABLE:
     "//table//tbody/tr[1]//button[.//div[normalize-space()='Mulai']]",
-  // WALI
 
+  // WALI
   INPUT_NIK_WALI: "//input[@id='nik wali']",
   INPUT_NAMA_LENGKAP_WALI: "//input[@name='Nama Lengkap Wali']",
   INPUT_JENIS_KELAMIN_WALI:

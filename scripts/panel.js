@@ -561,12 +561,10 @@ async function runCheckPemeriksaan(
       allowNextProcess(eData.pemeriksaan) &&
       shouldRun(eData.pemeriksaan_mandiri)
     ) {
-      eData = await runPemeriksaanMandiri(
-        eData,
-        defDataPemeriksaan,
-        pemeriksaanDataSchema,
-        mode,
-      );
+      // ✅ FIX: kirim hanya (iData, mode)
+      // defDataPemeriksaan & pemeriksaanDataSchema diambil sendiri
+      // di dalam runPemeriksaanMandiri via getDefaultPemeriksaanData()
+      eData = await runPemeriksaanMandiri(eData, mode);
     }
   } catch (err) {
     console.error("Error pada runCheckPemeriksaan:", err);

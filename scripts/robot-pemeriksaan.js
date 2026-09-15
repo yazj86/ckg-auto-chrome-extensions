@@ -5,8 +5,14 @@ async function runPemeriksaan(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
     `🩺 Mulai Pemeriksaan untuk ${iData.no}-${iData.nik}-${iData.nama}`,
   );
 
+  // ✅ Ambil default peserta (bukan default pemeriksaan)
   const defData = getDefaultData(mode);
+
+  // ✅ URL sebagai STRING (helper sudah handle mode)
   const url = getPelayananUrl(mode);
+
+  // ✅ Tanggal pemeriksaan dari localStorage panel
+  const tgl_pemeriksaan = localStorage.getItem(LOCAL_STORAGE.TGL_PEMERIKSAAN);
 
   let result;
   try {
@@ -14,6 +20,7 @@ async function runPemeriksaan(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
       aktifData: iData,
       defData,
       url,
+      tgl_pemeriksaan,
     });
   } catch (err) {
     console.error("Error di runPemeriksaanAutofill:", err);
@@ -54,32 +61,26 @@ async function runPemeriksaan(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
   return iData;
 }
 
-async function runPemeriksaanAutofill({ aktifData, defData, url }) {
-  // 1. Cari atau buat tab target
-  let targetTabId = null;
-  try {
-    const targetOrigin = new URL(url).origin;
-    const tabs = await chrome.tabs.query({});
-    const existingTab = tabs.find(
-      (t) => t.url && t.url.startsWith(targetOrigin),
-    );
+async function runPemeriksaanAutofill({
+  aktifData,
+  defData,
+  url,
+  tgl_pemeriksaan,
+}) {
+  // ✅ Pakai TAB AKTIF (bukan query by origin)
+  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const targetTabId = tab.id;
 
-    if (existingTab) {
-      targetTabId = existingTab.id;
-      if (!existingTab.url.includes(url)) {
-        await chrome.tabs.update(targetTabId, { url, active: true });
-      } else {
-        await chrome.tabs.reload(targetTabId);
-      }
-    } else {
-      const newTab = await chrome.tabs.create({ url, active: true });
-      targetTabId = newTab.id;
-    }
-  } catch (err) {
-    console.error("Gagal membuat/menemukan tab target:", err);
-    throw err;
-  }
+  // ✅ Redirect ke URL target (url sudah string)
+  await chrome.scripting.executeScript({
+    target: { tabId: targetTabId },
+    args: [url],
+    func: (targetUrl) => {
+      window.location.href = targetUrl;
+    },
+  });
 
+  // Tunggu page load & jalankan steps
   return new Promise((resolve, reject) => {
     function panelMessageListener(request) {
       if (request.type === "ROBOT_STATUS") {
@@ -95,192 +96,171 @@ async function runPemeriksaanAutofill({ aktifData, defData, url }) {
         chrome.scripting.executeScript(
           {
             target: { tabId: targetTabId },
-            args: [aktifData, defData],
-            func: async (inData, defData) => {
-              try {
-                const logStatus = (msg) => {
-                  try {
-                    chrome.runtime.sendMessage({
-                      type: "ROBOT_STATUS",
-                      message: msg,
-                    });
-                  } catch (err) {
-                    console.error("Failed to send status message:", err);
-                  }
-                };
+            args: [aktifData, defData, tgl_pemeriksaan],
+            func: async (inData, defData, tgl_pemeriksaan) => {
+              const logStatus = (msg) => {
+                try {
+                  chrome.runtime.sendMessage({
+                    type: "ROBOT_STATUS",
+                    message: msg,
+                  });
+                } catch (err) {
+                  console.error("Failed to send status message:", err);
+                }
+              };
 
-                logStatus("Data diterima, mulai pemeriksaan...");
+              logStatus("Data diterima, mulai pemeriksaan...");
 
-                const state = { earlyExit: null };
+              const state = { earlyExit: null };
 
-                const steps = [
-                  {
-                    name: "Select Search by NIK",
-                    action: async () => {
-                      logStatus("1. Pencarian by NIK...");
+              const steps = [
+                {
+                  name: "Select Search by NIK",
+                  action: async () => {
+                    logStatus("1. Pencarian by NIK...");
+                    const selectSearch = await waitForElementAsync(
+                      X_PATH.SELECT_SEARCH_PELAYANAN,
+                    );
+                    clickElement(selectSearch);
+                    await sleep(500);
 
-                      // Buka dropdown pencarian
-                      const selectSearch = await waitForElementAsync(
-                        X_PATH.SELECT_SEARCH_PELAYANAN,
-                        null,
-                        5000,
-                      );
-                      clickElement(selectSearch);
-                      await sleep(500);
+                    const selectSearchNik = await waitForElementAsync(
+                      X_PATH.SELECT_SEARCH_NIK_PELAYANAN,
+                    );
+                    clickElement(selectSearchNik);
+                    await sleep(750);
 
-                      // Pilih opsi NIK
-                      const selectSearchNik = await waitForElementAsync(
-                        X_PATH.SELECT_SEARCH_NIK_PELAYANAN,
-                        null,
-                        5000,
-                      );
-                      clickElement(selectSearchNik);
-                      await sleep(750);
-
-                      // Isi input NIK
-                      const inputSearchNik = await waitForElementAsync(
-                        X_PATH.INPUT_SEARCH_NIK_PELAYANAN,
-                        null,
-                        5000,
-                      );
-                      inputElementValue(inputSearchNik, String(inData.nik));
-                      await sleep(500);
-                      enterKeyElement(inputSearchNik);
-                      await sleepUntilLoaded(750, "Proses pencarian data", 20);
-                    },
+                    const inputSearchNik = await waitForElementAsync(
+                      X_PATH.INPUT_SEARCH_NIK_PELAYANAN,
+                    );
+                    forceInput(inputSearchNik, String(inData.nik));
+                    await sleep(500);
+                    enterKeyElement(inputSearchNik);
+                    await sleepUntilLoaded();
                   },
-                  {
-                    name: "Check which tab table",
-                    action: async () => {
-                      logStatus("2. Mencari berdasarkan tab table...");
+                },
+                {
+                  name: "Check which tab table",
+                  action: async () => {
+                    logStatus("2. Mencari berdasarkan tab table...");
 
-                      const belumEl = document.evaluate(
-                        "//div[contains(text(),'Belum Pemeriksaan')]//span",
+                    const belum = document.evaluate(
+                      "//div[contains(text(),'Belum Pemeriksaan')]//span",
+                      document,
+                      null,
+                      XPathResult.FIRST_ORDERED_NODE_TYPE,
+                      null,
+                    ).singleNodeValue;
+
+                    const count = belum
+                      ? parseInt(belum.textContent.trim())
+                      : null;
+                    if (count === 0) {
+                      const belumTab = belum.closest("div.cursor-pointer");
+                      const sedang = belumTab?.nextElementSibling;
+                      if (sedang) {
+                        clickElement(sedang);
+                        await sleep(500);
+                      }
+                    }
+                  },
+                },
+                {
+                  name: "Start Pemeriksaan",
+                  action: async () => {
+                    logStatus("3. Memulai pemeriksaan...");
+                    const btnMulai = await waitForElementAsync(
+                      X_PATH.BTN_MULAI_PEMERIKSAAN_TABLE,
+                    );
+                    clickElement(btnMulai);
+
+                    await sleepUntilLoaded();
+                    try {
+                      const btnSelesaikanExist = document.evaluate(
+                        X_PATH.BTN_SELESAIKAN_LAYANAN,
                         document,
                         null,
                         XPathResult.FIRST_ORDERED_NODE_TYPE,
                         null,
                       ).singleNodeValue;
 
-                      if (belumEl) {
-                        const count = parseInt(belumEl.textContent.trim());
-                        if (count === 0) {
-                          const belumTab =
-                            belumEl.closest("div.cursor-pointer");
-                          const sedangTab = belumTab?.nextElementSibling;
-                          if (sedangTab) {
-                            clickElement(sedangTab);
-                            await sleep(500);
-                          }
-                        }
-                      }
-                    },
-                  },
-                  {
-                    name: "Start Pemeriksaan",
-                    action: async () => {
-                      logStatus("3. Memulai pemeriksaan...");
-                      const btnMulai = await waitForElementAsync(
-                        X_PATH.BTN_MULAI_PEMERIKSAAN_TABLE,
-                        null,
-                        5000,
-                      );
-                      clickElement(btnMulai);
-                      await sleep(1000);
+                      if (btnSelesaikanExist) {
+                        logStatus("4. Pemeriksaan telah dimulai...");
+                      } else {
+                        logStatus("4. Memulai pemeriksaan CKG...");
+                        const btnMulaiPemeriksaan = await waitForElementAsync(
+                          X_PATH.BTN_MULAI_PEMERIKSAAN,
+                        );
+                        clickElement(btnMulaiPemeriksaan);
 
-                      try {
-                        const btnSelesaikanExist = await waitForElementAsync(
+                        const btnMulaiPemeriksaanSimpan =
+                          await waitForElementAsync(
+                            X_PATH.BTN_MULAI_PEMERIKSAAN_SIMPAN,
+                          );
+                        clickElement(btnMulaiPemeriksaanSimpan);
+
+                        await waitForElementAsync(
                           X_PATH.BTN_SELESAIKAN_LAYANAN,
                           null,
-                          3000,
+                          30000,
                         );
-                        if (btnSelesaikanExist) {
-                          logStatus("4. Pemeriksaan telah dimulai...");
-                        } else {
-                          logStatus("4. Memulai pemeriksaan CKG...");
-                          const btnMulaiPemeriksaan = await waitForElementAsync(
-                            X_PATH.BTN_MULAI_PEMERIKSAAN,
-                            null,
-                            5000,
-                          );
-                          clickElement(btnMulaiPemeriksaan);
-                          await sleep(500);
-
-                          const btnMulaiPemeriksaanSimpan =
-                            await waitForElementAsync(
-                              X_PATH.BTN_MULAI_PEMERIKSAAN_SIMPAN,
-                              null,
-                              5000,
-                            );
-                          clickElement(btnMulaiPemeriksaanSimpan);
-                          await sleep(1000);
-
-                          await waitForElementAsync(
-                            X_PATH.BTN_SELESAIKAN_LAYANAN,
-                            null,
-                            10000,
-                          );
-                          logStatus("✅ Pemeriksaan berhasil dimulai.");
-                        }
-                      } catch (err) {
-                        logStatus(
-                          "4. Timeout: Button Selesaikan Layanan tidak ditemukan!",
-                        );
-                        state.earlyExit = {
-                          success: false,
-                          status: "TIMEOUT",
-                          message:
-                            "System timeout waiting for Button Selesaikan Layanan response",
-                        };
                       }
-                    },
+                    } catch (err) {
+                      logStatus(
+                        "4. Timeout: Button Selesaikan Layanan tidak ditemukan!",
+                      );
+                      state.earlyExit = {
+                        success: false,
+                        status: "TIMEOUT",
+                        message:
+                          "System timeout waiting for Button Selesaikan Layanan response",
+                      };
+                    }
                   },
-                ];
+                },
+              ];
 
+              try {
                 for (const step of steps) {
                   if (state.earlyExit) break;
-                  if (step.shouldRun && !step.shouldRun()) continue;
+                  if (step.shouldRun && !step.shouldRun()) {
+                    console.log(`Skipping step: ${step.name}`);
+                    continue;
+                  }
                   console.log(`Executing step: ${step.name}`);
                   await step.action();
                 }
-
-                if (state.earlyExit) return state.earlyExit;
-                return {
-                  success: true,
-                  status: "-- ON PROGRESS --",
-                  message: "Berhasil Memulai Pemeriksaan",
-                };
               } catch (err) {
                 return {
                   success: false,
                   status: "ERROR",
-                  message: err.message || String(err),
+                  message: JSON.stringify(err),
                 };
               }
+
+              if (state.earlyExit) return state.earlyExit;
+              return {
+                success: true,
+                status: "-- ON PROGRESS --",
+                message: "Berhasil Memulai Pemeriksaan",
+              };
             },
           },
           (results) => {
+            console.log("results");
+            console.log(results);
             chrome.runtime.onMessage.removeListener(panelMessageListener);
             if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-              return;
+              console.log("[ERROR]");
+              console.log(chrome.runtime.lastError);
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(results[0].result);
             }
-            if (results && results[0] && results[0].error) {
-              reject(
-                new Error(results[0].error.message || String(results[0].error)),
-              );
-              return;
-            }
-            if (!results || !results[0] || results[0].result === undefined) {
-              reject(new Error("Hasil eksekusi skrip tidak valid"));
-              return;
-            }
-            resolve(results[0].result);
           },
         );
       }
     }
-
     chrome.tabs.onUpdated.addListener(listener);
   });
 }
