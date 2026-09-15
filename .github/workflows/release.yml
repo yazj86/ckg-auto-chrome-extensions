@@ -12,7 +12,7 @@ on:
         default: "v1.0.0"
 
 permissions:
-  contents: write   # Wajib agar bisa membuat release
+  contents: write
 
 jobs:
   build:
@@ -31,7 +31,6 @@ jobs:
           } else {
             $version = "${{ github.event.inputs.version }}"
           }
-          # Simpan output ke GITHUB_OUTPUT
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create ZIP
@@ -39,29 +38,47 @@ jobs:
         run: |
           $zipName = "ckg-auto-chrome-extensions.zip"
 
-          # Exclude files yang tidak perlu
-          $exclude = @(".git", ".github", "*.zip", "*.log")
+          # ============================================================
+          # Exclude file/folder yang tidak perlu
+          # ============================================================
+          $exclude = @(
+              # VCS & dev
+              ".git", ".github", ".vscode", ".gitignore", ".gitattributes",
 
-          # Gunakan folder temporary di luar direktori kerja (misal RUNNER_TEMP)
+              # File updater (jangan dikirim ke user)
+              "update.ps1", "update.bat", "update.exe",
+              "build.ps1", "build.bat", "build.exe",
+              "release.ps1", "release.bat", "release.yml",
+              "CKG-Updater.exe", "icon.ico",
+
+              # Dokumen dev
+              "README.md", "LICENSE", "CHANGELOG.md",
+
+              # Artifacts
+              "*.zip", "*.log", "version.txt",
+
+              # User data
+              "data", "backup", "logs", "dist", "temp", "node_modules"
+          )
+
           $tempFolder = Join-Path $env:RUNNER_TEMP "release_temp"
           New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null
 
-          # Copy file yang diperlukan ke folder temp
           Get-ChildItem -Path . -Force | Where-Object {
-            $item = $_
-            -not ($exclude | Where-Object { $item.Name -like $_ })
+              $item = $_
+              -not ($exclude | Where-Object { $item.Name -like $_ })
           } | ForEach-Object {
-            $destination = Join-Path $tempFolder $_.Name
-            Copy-Item $_.FullName $destination -Recurse -Force
+              $destination = Join-Path $tempFolder $_.Name
+              Copy-Item $_.FullName $destination -Recurse -Force
+              Write-Host "  [+] $($_.Name)"
           }
 
-          # Create ZIP dari isi folder temp
           Compress-Archive -Path "$tempFolder\*" -DestinationPath $zipName -Force
 
-          # Cleanup
-          Remove-Item $tempFolder -Recurse -Force
+          $sizeKB = [math]::Round((Get-Item $zipName).Length / 1KB, 1)
+          Write-Host "ZIP created: $zipName ($sizeKB KB)"
 
-          Write-Host "ZIP created: $zipName"
+          Remove-Item $tempFolder -Recurse -Force
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -85,5 +102,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Opsional: untuk menghindari peringatan Node 20 deprecated
-          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
