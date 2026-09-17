@@ -1,15 +1,5 @@
 // ==================== ROBOT PEMERIKSAAN BY DATE ====================
-// 2 Mode: Excel / DateRange
-// Support tab: "Belum Pemeriksaan" / "Sedang Pemeriksaan"
-//
-// ✅ Fix utama:
-//   1. Badge "Belum lengkap" + tombol "Selesaikan Layanan" ada → tetap isi mandiri
-//      (bukan skip). Karena pemeriksaan sudah dimulai tapi form mandiri belum diisi.
-//   2. Track skipTickets supaya tidak loop.
 
-// ============================================================
-// Helper: Convert "10 Sep 2013" → "10-09-2013"
-// ============================================================
 function convertTglUItoExcelFormat(tglUI) {
   if (!tglUI) return "";
   const bulanMap = {
@@ -25,16 +15,31 @@ function convertTglUItoExcelFormat(tglUI) {
 }
 
 // ============================================================
-// Helper: Compute status_usia
+// Helper: Compute status_usia (KATEGORI KEMENKES)
+// BALITA | ANAK | REMAJA | DEWASA | LANSIA
 // ============================================================
 function computeStatusUsia(tglLahirDDMMYYYY) {
   if (!tglLahirDDMMYYYY) return "";
   const age = calculateAgeInYears(tglLahirDDMMYYYY);
   if (age < 0) return "";
-  if (age < 6) return "BALITA";
-  if (age >= 6 && age < 18) return "SEKOLAH";
-  if (age >= 60) return "LANSIA";
-  return "";
+  if (age < 5) return "BALITA";
+  if (age < 10) return "ANAK";
+  if (age < 20) return "REMAJA";
+  if (age < 60) return "DEWASA";
+  return "LANSIA";
+}
+
+function computeStatusPerkawinan(tglLahirDDMMYYYY) {
+  if (typeof getDefaultStatusPerkawinan !== "function") {
+    console.warn("[PBD] getDefaultStatusPerkawinan tidak tersedia di helper.js");
+    return "Belum Menikah";
+  }
+  try {
+    return getDefaultStatusPerkawinan(tglLahirDDMMYYYY);
+  } catch (e) {
+    console.warn("[PBD] Error compute status perkawinan:", e);
+    return "Belum Menikah";
+  }
 }
 
 // ============================================================
@@ -1246,9 +1251,11 @@ async function retryByDateSingle(item, mode, options = {}) {
     return { success: true, message: "Hanya navigasi (mulai nonaktif)" };
   }
 
-  if (mandiri && typeof runPemeriksaanMandiri === "function") {
+if (mandiri && typeof runPemeriksaanMandiri === "function") {
     const tglLahirDDMMYYYY = convertTglUItoExcelFormat(item.tglLahir);
     const statusUsia = computeStatusUsia(tglLahirDDMMYYYY);
+    const age = calculateAgeInYears(tglLahirDDMMYYYY);
+    const statusPerkawinan = computeStatusPerkawinan(tglLahirDDMMYYYY);
 
     const syntheticIData = {
       no: 0,
@@ -1256,6 +1263,9 @@ async function retryByDateSingle(item, mode, options = {}) {
       nama: item.nama,
       tgl_lahir: tglLahirDDMMYYYY,
       status_usia: statusUsia,
+      usia_tahun: age,
+      status_perkawinan: statusPerkawinan,
+      default_status_perkawinan: statusPerkawinan,
     };
 
     try {
@@ -1310,9 +1320,25 @@ async function pbdProcessMandiri(item, mode, shouldFillMandiri, indexLabel) {
   try {
     const tglLahirDDMMYYYY = convertTglUItoExcelFormat(item.tglLahir);
     const statusUsia = computeStatusUsia(tglLahirDDMMYYYY);
+    const age = calculateAgeInYears(tglLahirDDMMYYYY);
+
+    // ✅ Hitung status perkawinan berdasarkan umur
+    const statusPerkawinan = computeStatusPerkawinan(tglLahirDDMMYYYY);
+
+    const kategoriKawin =
+      age < 19
+        ? "paksa Belum Menikah"
+        : age >= 31
+          ? "paksa Menikah"
+          : age >= 20
+            ? "random"
+            : "default";
 
     appendPanelMessage(
-      `      → Tgl: ${item.tglLahir} → ${tglLahirDDMMYYYY} | Usia: ${statusUsia || "(dewasa)"}`,
+      `      → Tgl: ${item.tglLahir} → ${tglLahirDDMMYYYY} | Usia: ${age} th | Kategori: ${statusUsia}`,
+    );
+    appendPanelMessage(
+      `      → Status kawin: "${statusPerkawinan}" (${kategoriKawin})`,
     );
 
     const defaultCheck = getDefaultPemeriksaanData();
@@ -1320,12 +1346,23 @@ async function pbdProcessMandiri(item, mode, shouldFillMandiri, indexLabel) {
       `      → Inject ${Object.keys(defaultCheck).length} field default`,
     );
 
+    // ✅ Override field default form supaya konsisten
+    if (defaultCheck.status_usia !== undefined) {
+      defaultCheck.status_usia = statusUsia;
+    }
+    if (defaultCheck.status_perkawinan !== undefined) {
+      defaultCheck.status_perkawinan = statusPerkawinan;
+    }
+
     const syntheticIData = {
       no: indexLabel || 1,
       nik: item.noTiket || item.tiket || "",
       nama: item.nama || "",
       tgl_lahir: tglLahirDDMMYYYY,
       status_usia: statusUsia,
+      usia_tahun: age,
+      status_perkawinan: statusPerkawinan,
+      default_status_perkawinan: statusPerkawinan,
     };
 
     const mandiriResult = await runPemeriksaanMandiri(syntheticIData, mode);

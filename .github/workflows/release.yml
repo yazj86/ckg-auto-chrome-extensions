@@ -89,7 +89,8 @@ jobs:
             Update ${{ steps.get_version.outputs.version }}
 
             ## Perubahan:
-            - Update terbaru
+            - Update terbaru versi 2.0.0
+            - add tab Pemeriksaan By Date
             - Perbaikan bug
 
             ## Cara Update:

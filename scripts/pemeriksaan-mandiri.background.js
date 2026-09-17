@@ -165,44 +165,70 @@ async function runDynamicAutofillForm(
       // 5. defData[defKey]               → default dari halaman Persiapan
       // 6. field.default                 → hardcoded di schema
       // ============================================================
-      let valueToFill;
-      let valueSource = "";
+let valueToFill;
+let valueSource = "";
 
-      if (inData && inData[field.key] !== undefined && inData[field.key] !== "") {
-        // PRIORITAS 1
-        valueToFill = inData[field.key];
-        valueSource = `iData[${field.key}]`;
-      } else if (inData && inData[defKey] !== undefined && inData[defKey] !== "") {
-        // PRIORITAS 2
-        valueToFill = inData[defKey];
-        valueSource = `iData[${defKey}]`;
-      } else if (
-        field.sourceKey &&
-        inData &&
-        inData[field.sourceKey] !== undefined &&
-        inData[field.sourceKey] !== ""
-      ) {
-        // PRIORITAS 3
-        valueToFill = inData[field.sourceKey];
-        valueSource = `iData[${field.sourceKey}]`;
-      } else if (
-        // PRIORITAS 4 (NEW): mapping default by status_usia
-        field.defaultByStatusUsia &&
-        inData &&
-        inData.status_usia &&
-        field.defaultByStatusUsia[inData.status_usia]
-      ) {
-        valueToFill = field.defaultByStatusUsia[inData.status_usia];
-        valueSource = `defaultByStatusUsia[${inData.status_usia}]`;
-      } else if (defData && defData[defKey] !== undefined && defData[defKey] !== "") {
-        // PRIORITAS 5
-        valueToFill = defData[defKey];
-        valueSource = `defData[${defKey}]`;
-      } else {
-        // PRIORITAS 6
-        valueToFill = field.default;
-        valueSource = "field.default";
-      }
+// ============================================================
+// ✅ PRIORITAS KHUSUS: field status pernikahan/perkawinan
+// Otomatis ambil dari inData.status_perkawinan (dihitung dari umur)
+// ============================================================
+const isMarriageField =
+  field.key === "status_pernikahan" ||
+  field.key === "status_perkawinan" ||
+  (field.label || "").toLowerCase().includes("status pernikahan") ||
+  (field.label || "").toLowerCase().includes("status perkawinan");
+
+if (
+  isMarriageField &&
+  inData &&
+  inData.status_perkawinan !== undefined &&
+  inData.status_perkawinan !== ""
+) {
+  valueToFill = inData.status_perkawinan;
+  valueSource = "iData.status_perkawinan (auto by umur)";
+} else if (
+  inData &&
+  inData[field.key] !== undefined &&
+  inData[field.key] !== ""
+) {
+  // PRIORITAS 1
+  valueToFill = inData[field.key];
+  valueSource = `iData[${field.key}]`;
+} else if (
+  inData &&
+  inData[defKey] !== undefined &&
+  inData[defKey] !== ""
+) {
+  // PRIORITAS 2
+  valueToFill = inData[defKey];
+  valueSource = `iData[${defKey}]`;
+} else if (
+  field.sourceKey &&
+  inData &&
+  inData[field.sourceKey] !== undefined &&
+  inData[field.sourceKey] !== ""
+) {
+  // PRIORITAS 3
+  valueToFill = inData[field.sourceKey];
+  valueSource = `iData[${field.sourceKey}]`;
+} else if (
+  // PRIORITAS 4: mapping default by status_usia
+  field.defaultByStatusUsia &&
+  inData &&
+  inData.status_usia &&
+  field.defaultByStatusUsia[inData.status_usia]
+) {
+  valueToFill = field.defaultByStatusUsia[inData.status_usia];
+  valueSource = `defaultByStatusUsia[${inData.status_usia}]`;
+} else if (defData && defData[defKey] !== undefined && defData[defKey] !== "") {
+  // PRIORITAS 5
+  valueToFill = defData[defKey];
+  valueSource = `defData[${defKey}]`;
+} else {
+  // PRIORITAS 6
+  valueToFill = field.default;
+  valueSource = "field.default";
+}
 
       // ✅ DEBUG: log sumber value
       if (valueToFill === undefined || valueToFill === null || valueToFill === "") {
@@ -340,22 +366,28 @@ async function runDynamicAutofillForm(
       else {
         const radioItems = targetQuestionEl.querySelectorAll(".sd-item");
 
+        // ✅ Normalisasi "Ya"/"Iya" dan variasi lain
+        const normalizeText = (s) =>
+          String(s)
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase()
+            .replace(/^iya\b/, "ya")           // "iya" → "ya"
+            .replace(/^yaa?\b/, "ya")          // "yaa" / "ya" → "ya"
+            .replace(/^tidak\/tidak ada\b/, "tidak")
+            .replace(/^ya\/ada\b/, "ya");
+
+        const schemaNorm = normalizeText(valueToFill);
+
         for (const item of radioItems) {
           const labelTextEl = item.querySelector(
             ".sd-item__control-label .sv-string-viewer",
           );
 
           if (labelTextEl) {
-            const normalizedDOMText = labelTextEl.textContent
-              .replace(/\s+/g, " ")
-              .trim()
-              .toLowerCase();
-            const normalizedSchemaText = String(valueToFill)
-              .replace(/\s+/g, " ")
-              .trim()
-              .toLowerCase();
+            const domNorm = normalizeText(labelTextEl.textContent);
 
-            if (normalizedDOMText === normalizedSchemaText) {
+            if (domNorm === schemaNorm) {
               const radioInput = item.querySelector("input[type='radio']");
               if (radioInput) {
                 radioInput.click();
@@ -363,7 +395,7 @@ async function runDynamicAutofillForm(
                   new Event("change", { bubbles: true }),
                 );
                 console.log(
-                  `[Robot] ✅ Radio "${valueToFill}" untuk "${field.label}"`,
+                  `[Robot] ✅ Radio "${labelTextEl.textContent.trim()}" untuk "${field.label}"`,
                 );
                 optionFound = true;
               }

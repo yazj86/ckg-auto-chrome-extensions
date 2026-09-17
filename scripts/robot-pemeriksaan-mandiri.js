@@ -4,6 +4,32 @@ async function runPemeriksaanMandiri(iData, mode = REGISTRATION_MODES.INDIVIDUAL
   showPanelMessage(
     `📋 Mulai Pemeriksaan Mandiri untuk ${iData.no}-${iData.nik}-${iData.nama}`,
   );
+  if (!iData.status_usia && iData.tgl_lahir) {
+    try {
+      if (typeof computeStatusUsia === "function") {
+        iData.status_usia = computeStatusUsia(iData.tgl_lahir);
+      } else if (typeof getAgeCategory === "function") {
+        iData.status_usia = getAgeCategory(iData.tgl_lahir);
+      }
+    } catch (e) {
+      console.warn("[Mandiri] Gagal hitung status_usia:", e);
+    }
+  }
+
+  if (!iData.status_perkawinan && iData.tgl_lahir) {
+    try {
+      if (typeof computeStatusPerkawinan === "function") {
+        iData.status_perkawinan = computeStatusPerkawinan(iData.tgl_lahir);
+      } else if (typeof getDefaultStatusPerkawinan === "function") {
+        iData.status_perkawinan = getDefaultStatusPerkawinan(iData.tgl_lahir);
+      }
+    } catch (e) {
+      console.warn("[Mandiri] Gagal hitung status_perkawinan:", e);
+    }
+  }
+
+  console.log("[Mandiri] iData status_usia:", iData.status_usia || "(kosong)");
+  console.log("[Mandiri] iData status_perkawinan:", iData.status_perkawinan || "(kosong)");
 
   // ✅ FIX: Default PEMERIKSAAN, bukan default peserta
   const defData = getDefaultPemeriksaanData();

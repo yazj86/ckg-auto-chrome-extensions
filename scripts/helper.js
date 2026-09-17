@@ -475,7 +475,24 @@ function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
   });
 }
 
+
+
+/**
+ * Hitung usia dalam tahun dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {number} usia tahun, atau -1 kalau invalid
+ */
 // ==================== AGE HELPERS ====================
+
+/**
+ * Kategori umur standar Indonesia (Riskesdas/Kemenkes):
+ *   BALITA  : 0-4 tahun
+ *   ANAK    : 5-9 tahun
+ *   REMAJA  : 10-19 tahun
+ *   DEWASA  : 20-59 tahun
+ *   LANSIA  : 60+ tahun
+ *   UNKNOWN : tanggal invalid
+ */
 
 /**
  * Hitung usia dalam tahun dari tanggal lahir.
@@ -496,6 +513,8 @@ function calculateAgeInYears(dateStr) {
   return age;
 }
 
+// ---------- Fungsi lama (dipertahankan untuk backward compat) ----------
+
 function isUnder10Years(dateStr) {
   const age = calculateAgeInYears(dateStr);
   return age >= 0 && age < 10;
@@ -511,13 +530,221 @@ function isOver60Years(dateStr) {
   return age >= 0 && age >= 60;
 }
 
+// ---------- Fungsi kategori umur baru ----------
+
+function isBalita(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 0 && age < 5;
+}
+
+function isAnak(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 5 && age < 10;
+}
+
+function isRemaja(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 10 && age < 20;
+}
+
+function isDewasa(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 20 && age < 60;
+}
+
+function isLansia(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= 60;
+}
+
+/**
+ * Ambil label kategori umur.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {"BALITA"|"ANAK"|"REMAJA"|"DEWASA"|"LANSIA"|"UNKNOWN"}
+ */
+function getAgeCategory(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  if (age < 0) return "UNKNOWN";
+  if (age < 5) return "BALITA";
+  if (age < 10) return "ANAK";
+  if (age < 20) return "REMAJA";
+  if (age < 60) return "DEWASA";
+  return "LANSIA";
+}
+
+/**
+ * Set pekerjaan berdasarkan kategori usia.
+ * BALITA → Belum/Tidak Bekerja
+ * ANAK/REMAJA → Pelajar
+ * DEWASA/LANSIA → biarkan pekerjaan asli
+ *
+ * @param {string} pekerjaan - pekerjaan asli dari input
+ * @param {string} status_usia - hasil getAgeCategory()
+ * @returns {string}
+ */
 function setPekerjaanBasedOnAge(pekerjaan, status_usia) {
-  if (status_usia === "BALITA") {
-    return "Belum/Tidak Bekerja";
-  } else if (status_usia === "SEKOLAH") {
-    return "Pelajar";
+  switch (status_usia) {
+    case "BALITA":
+      return "Belum/Tidak Bekerja";
+    case "ANAK":
+    case "REMAJA":
+      return "Pelajar";
+    case "DEWASA":
+    case "LANSIA":
+      return pekerjaan; // biarkan user pilih
+    default:
+      return pekerjaan;
   }
-  return pekerjaan;
+}
+
+/**
+ * Versi ringkas — auto-set pekerjaan default langsung dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {string} pekerjaanAsli - pekerjaan yang sudah diisi user (opsional)
+ * @returns {string}
+ */
+function getDefaultPekerjaan(dateStr, pekerjaanAsli = "") {
+  const kategori = getAgeCategory(dateStr);
+  if (kategori === "BALITA") return "Belum/Tidak Bekerja";
+  if (kategori === "ANAK" || kategori === "REMAJA") return "Pelajar";
+  return pekerjaanAsli;
+}
+
+// ==================== MARRIAGE / STATUS PERKAWINAN HELPERS ====================
+
+/**
+ * Aturan status perkawinan berdasarkan umur:
+ *   < 19      → "Belum Menikah" (paksa, UU No. 16/2019)
+ *   19        → "Belum Menikah" (default)
+ *   20 - 30   → Random (Menikah / Belum Menikah)
+ *   >= 31     → "Menikah" (paksa, termasuk lansia)
+ */
+const MARRIAGE_RULES = {
+  MIN_LEGAL_AGE: 19,
+  RANDOM_MIN_AGE: 20,
+  RANDOM_MAX_AGE: 30,
+  FORCE_KAWIN_AGE: 31,
+  RANDOM_PROB_KAWIN: 0.5, // 50% Menikah, 50% Belum Menikah
+};
+
+/**
+ * Cek apakah seseorang eligible untuk punya status perkawinan
+ * selain "Belum Menikah".
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {boolean}
+ */
+function isEligibleForMarriageStatus(dateStr) {
+  const age = calculateAgeInYears(dateStr);
+  return age >= MARRIAGE_RULES.MIN_LEGAL_AGE;
+}
+
+/**
+ * Daftar status perkawinan yang valid untuk usia.
+ * Di bawah 19 tahun → hanya "Belum Menikah".
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {string[]}
+ */
+function getAllowedStatusPerkawinan(dateStr) {
+  if (!isEligibleForMarriageStatus(dateStr)) {
+    return ["Belum Menikah"];
+  }
+  return ["Belum Menikah", "Menikah", "Cerai Hidup", "Cerai Mati"];
+}
+
+/**
+ * Dapatkan default status perkawinan berdasarkan umur.
+ *
+ * Aturan:
+ *   < 19        → "Belum Menikah"
+ *   19          → "Belum Menikah"
+ *   20–30       → Random (Menikah / Belum Menikah)
+ *   >= 31       → "Menikah" (termasuk lansia)
+ *
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {object} options
+ * @param {number} options.probKawin - probabilitas Menikah (0.0 - 1.0), default 0.5
+ * @returns {"Menikah"|"Belum Menikah"}
+ */
+function getDefaultStatusPerkawinan(dateStr, options = {}) {
+  const { probKawin = MARRIAGE_RULES.RANDOM_PROB_KAWIN } = options;
+
+  const age = calculateAgeInYears(dateStr);
+  if (age < 0) return "Belum Menikah"; // invalid → safe default
+
+  // 1. Di bawah umur legal → Belum Menikah
+  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) {
+    return "Belum Menikah";
+  }
+
+  // 2. Di atas rentang random (>= 31) → paksa Menikah (termasuk lansia)
+  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) {
+    return "Menikah";
+  }
+
+  // 3. Rentang random (20–30)
+  if (
+    age >= MARRIAGE_RULES.RANDOM_MIN_AGE &&
+    age <= MARRIAGE_RULES.RANDOM_MAX_AGE
+  ) {
+    return Math.random() < probKawin ? "Menikah" : "Belum Menikah";
+  }
+
+  // 4. Usia 19 → default Belum Menikah
+  return "Belum Menikah";
+}
+
+/**
+ * Paksa status perkawinan jadi valid sesuai umur.
+ * - Usia < 19  → "Belum Menikah"
+ * - Usia >= 31 → "Menikah"
+ * - Usia 20-30 → pakai input kalau valid, kalau tidak → default random
+ *
+ * @param {string} statusPerkawinan - dari input user / default form
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {object} options
+ * @returns {string}
+ */
+function enforceStatusPerkawinan(statusPerkawinan, dateStr, options = {}) {
+  const age = calculateAgeInYears(dateStr);
+
+  // Usia < 19 → selalu Belum Menikah
+  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) {
+    return "Belum Menikah";
+  }
+
+  // Usia >= 31 → selalu Menikah
+  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) {
+    return "Menikah";
+  }
+
+  // Rentang random — pakai input kalau valid
+  const validStatuses = [
+    "Menikah",
+    "Belum Menikah",
+    "Cerai Hidup",
+    "Cerai Mati",
+  ];
+  if (statusPerkawinan && validStatuses.includes(statusPerkawinan)) {
+    return statusPerkawinan;
+  }
+
+  // Input kosong / invalid → pakai default
+  return getDefaultStatusPerkawinan(dateStr, options);
+}
+
+/**
+ * Cek apakah status = Menikah / pernah menikah.
+ * Berguna untuk cek "punya anak", "status keluarga", dll.
+ */
+function isEverMarried(statusPerkawinan) {
+  return ["Menikah", "Cerai Hidup", "Cerai Mati"].includes(statusPerkawinan);
+}
+
+/**
+ * Alias untuk isEligibleForMarriageStatus (lebih deskriptif).
+ */
+function canHaveMarriageStatus(dateStr) {
+  return isEligibleForMarriageStatus(dateStr);
 }
 
 // ==================== PEKERJAAN LABEL ====================

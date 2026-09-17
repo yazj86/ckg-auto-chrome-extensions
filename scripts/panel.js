@@ -2,6 +2,9 @@
 let currentMode = REGISTRATION_MODES.INDIVIDUAL;
 let byDateLogEntries = []; // ✅ buffer untuk export Excel
 
+// ✅ NEW: Map untuk lookup index asli (setelah delete/re-render)
+window.__byDateLogData = byDateLogEntries;
+
 // ==================== KONFIGURASI HALAMAN PERSIAPAN ====================
 const PREPARATION_PAGES = {
   [REGISTRATION_MODES.INDIVIDUAL]: "data-preparation-individu.html",
@@ -188,7 +191,6 @@ document.addEventListener("DOMContentLoaded", () => {
     clearByDateLogBtn.addEventListener("click", clearByDateLog);
   }
 
-  // ✅ NEW: tombol download log Excel
   if (downloadByDateLogBtn) {
     downloadByDateLogBtn.addEventListener("click", downloadByDateLogExcel);
   }
@@ -212,7 +214,6 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.getItem("by-date-chk-mandiri") !== "false";
     byDateChkMandiri.addEventListener("change", function () {
       localStorage.setItem("by-date-chk-mandiri", String(this.checked));
-      // Sync ke run-setting.pemeriksaan.mandiri
       const currentData = getRunSettingData();
       currentData.pemeriksaan.mandiri = this.checked;
       saveRunSettingData(currentData);
@@ -721,9 +722,6 @@ async function handlePemeriksaanByDate() {
   const tglDari = localStorage.getItem(LOCAL_STORAGE.BY_DATE_DARI) || "";
   const tglSampai = localStorage.getItem(LOCAL_STORAGE.BY_DATE_SAMPAI) || "";
 
-  // ------------------------------------------------------------
-  // ✅ Validasi wajib (tanggal akan diteruskan ke robot)
-  // ------------------------------------------------------------
   if (!tglDari || !tglSampai) {
     Swal.fire({
       icon: "warning",
@@ -742,21 +740,16 @@ async function handlePemeriksaanByDate() {
     return;
   }
 
-  // ------------------------------------------------------------
-  // Ambil opsi dari checkbox by-date
-  // ------------------------------------------------------------
   const chkMulai = document.getElementById("byDateChkMulai");
   const chkMandiri = document.getElementById("byDateChkMandiri");
   const optMulai = chkMulai ? chkMulai.checked : true;
   const optMandiri = chkMandiri ? chkMandiri.checked : true;
 
-  const srcChecked =
-    document.querySelector('input[name="byDateSource"]:checked');
+  const srcChecked = document.querySelector(
+    'input[name="byDateSource"]:checked',
+  );
   const sourceTab = srcChecked ? srcChecked.value : "Belum Pemeriksaan";
 
-  // ------------------------------------------------------------
-  // Info ke dialog konfirmasi
-  // ------------------------------------------------------------
   const infoTgl = `
     <br>
     <div style="background:#e8f5f7;padding:8px 12px;border-radius:6px;margin-top:8px">
@@ -789,9 +782,6 @@ async function handlePemeriksaanByDate() {
 
   if (!confirm.isConfirmed) return;
 
-  // ------------------------------------------------------------
-  // Cek fungsi tersedia
-  // ------------------------------------------------------------
   if (typeof runPemeriksaanByDate !== "function") {
     showErrorSwal(
       "Fungsi runPemeriksaanByDate tidak ditemukan. Pastikan file robot-pemeriksaan-by-date.js sudah dimuat.",
@@ -799,7 +789,9 @@ async function handlePemeriksaanByDate() {
     return;
   }
 
-  // Reset flag stop + log
+  // ✅ Simpan mode & sourceTab global untuk log & retry
+  window.__byDateCurrentMode = currentMode;
+  window.__byDateSourceTab = sourceTab;
   window.__byDateStop = false;
 
   showLoading();
@@ -810,7 +802,6 @@ async function handlePemeriksaanByDate() {
   clearByDateLog();
 
   try {
-    // ✅ Kirim filter + opsi ke robot
     const result = await runPemeriksaanByDate(currentMode, {
       dari: tglDari,
       sampai: tglSampai,
@@ -866,73 +857,412 @@ async function handlePemeriksaanByDate() {
   }
 }
 
-// ==================== ✅ BY-DATE LOG TABLE ====================
-function appendByDateLog({ nama, tglLahir, tiket, status, keterangan }) {
+// ==================== ✅ BY-DATE LOG TABLE (AKSI DI PALING AWAL) ====================
+function appendByDateLog(entry) {
   const tbody = document.getElementById("byDateLogBody");
   const counter = document.getElementById("byDateLogCounter");
   if (!tbody) return;
 
-  const idx = byDateLogEntries.length + 1;
-  const now = new Date();
-  const waktu = now.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  // ✅ Entry lengkap dengan timestamp + mode + sourceTab
+  const logEntry = {
+    no: byDateLogEntries.length + 1,
+    nama: entry.nama || "-",
+    tglLahir: entry.tglLahir || "-",
+    tiket: entry.tiket || "-",
+    status: entry.status || "WARN",
+    keterangan: entry.keterangan || "-",
+    mode: entry.mode || window.__byDateCurrentMode || "individual",
+    sourceTab: entry.sourceTab || window.__byDateSourceTab || "Belum Pemeriksaan",
+    tanggalJam: new Date().toLocaleString("id-ID"),
+    timestamp: entry.timestamp || new Date().toISOString(),
+  };
 
-  // ✅ Simpan ke buffer untuk export Excel
-  byDateLogEntries.push({
-    no: idx,
-    nama: nama || "",
-    tglLahir: tglLahir || "",
-    tiket: tiket || "",
-    status: status || "",
-    keterangan: keterangan || "",
-    tanggalJam: now.toLocaleString("id-ID"),
-  });
-
-  let badge = `<span class="badge bg-secondary">${status}</span>`;
-  let rowClass = "";
-  if (status === "OK") {
-    badge = `<span class="badge bg-success">OK</span>`;
-    rowClass = "log-row-ok";
-  } else if (status === "SKIP") {
-    badge = `<span class="badge bg-info text-dark">SKIP</span>`;
-    rowClass = "log-row-skip";
-  } else if (status === "GAGAL" || status === "FAIL") {
-    badge = `<span class="badge bg-danger">GAGAL</span>`;
-    rowClass = "log-row-fail";
-  } else if (status === "WARN") {
-    badge = `<span class="badge bg-warning text-dark">WARN</span>`;
-    rowClass = "log-row-warn";
-  }
+  byDateLogEntries.push(logEntry);
 
   const tr = document.createElement("tr");
-  if (rowClass) tr.className = rowClass;
+  tr.dataset.index = String(logEntry.no - 1);
+  tr.dataset.status = logEntry.status;
+
+  // Row color
+  if (logEntry.status === "OK") tr.className = "log-row-ok";
+  else if (logEntry.status === "SKIP") tr.className = "log-row-skip";
+  else if (logEntry.status === "WARN") tr.className = "log-row-warn";
+  else if (logEntry.status === "GAGAL" || logEntry.status === "ERROR")
+    tr.className = "log-row-fail";
+
+  const badge = getStatusBadgeHTML(logEntry.status);
+  const waktu = formatTimeShort(logEntry.timestamp);
+  const idx = logEntry.no - 1;
+
+  // ✅ Kolom Aksi di PALING AWAL
   tr.innerHTML = `
-    <td>${idx}</td>
-    <td>${nama || "-"}</td>
-    <td>${tglLahir || "-"}</td>
-    <td>${tiket || "-"}</td>
+    <td class="text-center">${renderAksiDropdownHTML(logEntry, idx)}</td>
+    <td class="text-muted">${logEntry.no}</td>
+    <td>${escapeHTML(logEntry.nama)}</td>
+    <td>${escapeHTML(logEntry.tglLahir)}</td>
+    <td><code style="font-size:0.72rem">${escapeHTML(logEntry.tiket)}</code></td>
     <td class="text-center">${badge}</td>
-    <td>${keterangan || "-"}</td>
-    <td>${waktu}</td>
+    <td class="small">${escapeHTML(logEntry.keterangan)}</td>
+    <td class="text-muted small">${waktu}</td>
   `;
+
   tbody.appendChild(tr);
   tr.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
-  if (counter) counter.textContent = String(idx);
+  if (counter) counter.textContent = String(byDateLogEntries.length);
 }
 
+// ==================== RENDER AKSI DROPDOWN (BOOTSTRAP) ====================
+function renderAksiDropdownHTML(entry, idx) {
+  const isDone = entry.status === "OK";
+  const isSkip = entry.status === "SKIP";
+  const disableRetry = isDone || isSkip;
+
+  const btnId = `logAksiBtn-${idx}`;
+
+  return `
+    <div class="dropdown">
+      <button class="btn btn-sm btn-warning dropdown-toggle py-0 px-2"
+              type="button"
+              id="${btnId}"
+              data-bs-toggle="dropdown"
+              data-bs-boundary="viewport"
+              aria-expanded="false"
+              style="font-size:0.68rem;font-weight:700">
+        Aksi
+      </button>
+      <ul class="dropdown-menu shadow compact-menu" aria-labelledby="${btnId}" style="font-size:0.76rem">
+        <li class="px-3 pt-1 pb-1 dropdown-header">
+          <small class="text-muted d-block text-center">${escapeHTML(entry.nama)}</small>
+          <small class="text-muted d-block text-center" style="font-size:smaller">${escapeHTML(entry.tiket)}</small>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <a class="dropdown-item py-1 action-log-trigger ${disableRetry ? "disabled" : ""}"
+             data-action="retry" data-index="${idx}" href="#"
+             style="${disableRetry ? "pointer-events:none;opacity:0.5" : ""}">
+            🔄 Retry Peserta
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item py-1 action-log-trigger" data-action="detail" data-index="${idx}" href="#">
+            👁 Lihat Detail
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item py-1 action-log-trigger" data-action="copy" data-index="${idx}" href="#">
+            📋 Copy Data
+          </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <a class="dropdown-item py-1 text-danger action-log-trigger" data-action="delete" data-index="${idx}" href="#">
+            🗑 Hapus dari Log
+          </a>
+        </li>
+      </ul>
+    </div>
+  `;
+}
+
+// ==================== EVENT DELEGATION UNTUK AKSI LOG ====================
+document.addEventListener("click", async (e) => {
+  const trigger = e.target.closest(".action-log-trigger");
+  if (!trigger) return;
+  e.preventDefault();
+
+  const action = trigger.dataset.action;
+  const idx = parseInt(trigger.dataset.index, 10);
+  if (isNaN(idx)) return;
+
+  if (action === "retry") await handleRetryFromLog(idx);
+  else if (action === "detail") handleViewDetailLog(idx);
+  else if (action === "copy") handleCopyLog(idx);
+  else if (action === "delete") handleDeleteLog(idx);
+});
+
+// ==================== HANDLER: RETRY ====================
+async function handleRetryFromLog(idx) {
+  const entry = byDateLogEntries[idx];
+  if (!entry) return;
+
+  if (typeof retryByDateSingle !== "function") {
+    Swal.fire({
+      icon: "error",
+      title: "Retry tidak tersedia",
+      text: "Fungsi retryByDateSingle tidak ditemukan.",
+    });
+    return;
+  }
+
+  const confirm = await Swal.fire({
+    icon: "question",
+    title: "Retry peserta ini?",
+    html: `
+      <div style="text-align:left;font-size:0.9rem">
+        <p style="margin:4px 0"><b>Nama:</b> ${escapeHTML(entry.nama)}</p>
+        <p style="margin:4px 0"><b>Tgl Lahir:</b> ${escapeHTML(entry.tglLahir)}</p>
+        <p style="margin:4px 0"><b>Tiket:</b> ${escapeHTML(entry.tiket)}</p>
+        <p style="margin:4px 0"><b>Status sebelumnya:</b> ${getStatusBadgeHTML(entry.status)}</p>
+        <p style="margin:4px 0;color:#64748b;font-size:0.85rem"><b>Keterangan:</b> ${escapeHTML(entry.keterangan)}</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Ya, Retry",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#0f7f8c",
+  });
+  if (!confirm.isConfirmed) return;
+
+  appendPanelMessage(`\n🔄 Retry: ${entry.nama} (${entry.tiket})`);
+  showLoading();
+
+  try {
+    const result = await retryByDateSingle(
+      {
+        nama: entry.nama,
+        tglLahir: entry.tglLahir,
+        tiket: entry.tiket,
+      },
+      entry.mode || "individual",
+      {
+        mandiri: true,
+        sourceTab: entry.sourceTab || "Belum Pemeriksaan",
+      },
+    );
+
+    hideLoading();
+
+    // Log hasil retry sebagai baris baru
+    appendByDateLog({
+      nama: entry.nama,
+      tglLahir: entry.tglLahir,
+      tiket: entry.tiket,
+      status: result.success ? "OK" : "GAGAL",
+      keterangan: `[Retry] ${result.message || "(no message)"}`,
+      mode: entry.mode,
+      sourceTab: entry.sourceTab,
+      timestamp: new Date().toISOString(),
+    });
+
+    // ✅ Update baris lama jadi "diretry" — Aksi sekarang di children[0]
+    const oldRow = document.querySelector(
+      `#byDateLogBody tr[data-index="${idx}"]`,
+    );
+    if (oldRow) {
+      const aksiCell = oldRow.children[0]; // ← KOLOM PALING AWAL
+      if (aksiCell) {
+        aksiCell.innerHTML = `<span style="color:#64748b;font-size:0.72rem;font-style:italic">↻ diretry</span>`;
+      }
+    }
+
+    Swal.fire({
+      icon: result.success ? "success" : "warning",
+      title: result.success ? "Retry berhasil" : "Retry gagal",
+      text: result.message || "-",
+      timer: 2500,
+      showConfirmButton: false,
+    });
+  } catch (err) {
+    hideLoading();
+    console.error("[RETRY] Error:", err);
+    appendByDateLog({
+      nama: entry.nama,
+      tglLahir: entry.tglLahir,
+      tiket: entry.tiket,
+      status: "ERROR",
+      keterangan: `[Retry] Error: ${err.message}`,
+      mode: entry.mode,
+      sourceTab: entry.sourceTab,
+      timestamp: new Date().toISOString(),
+    });
+    Swal.fire({ icon: "error", title: "Retry error", text: err.message });
+  }
+}
+
+// ==================== HANDLER: LIHAT DETAIL ====================
+function handleViewDetailLog(idx) {
+  const entry = byDateLogEntries[idx];
+  if (!entry) return;
+
+  Swal.fire({
+    title: "Detail Log",
+    html: `
+      <div style="text-align:left;font-size:0.88rem">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:4px 0;color:#64748b;width:120px">Nama</td><td><b>${escapeHTML(entry.nama)}</b></td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Tgl Lahir</td><td>${escapeHTML(entry.tglLahir)}</td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Tiket</td><td><code>${escapeHTML(entry.tiket)}</code></td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Status</td><td>${getStatusBadgeHTML(entry.status)}</td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Keterangan</td><td>${escapeHTML(entry.keterangan)}</td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Mode</td><td>${escapeHTML(entry.mode || "-")}</td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Source Tab</td><td>${escapeHTML(entry.sourceTab || "-")}</td></tr>
+          <tr><td style="padding:4px 0;color:#64748b">Waktu</td><td>${escapeHTML(entry.tanggalJam || "-")}</td></tr>
+        </table>
+      </div>
+    `,
+    icon: "info",
+    confirmButtonText: "Tutup",
+    confirmButtonColor: "#0f7f8c",
+    width: 480,
+  });
+}
+
+// ==================== HANDLER: COPY DATA ====================
+async function handleCopyLog(idx) {
+  const entry = byDateLogEntries[idx];
+  if (!entry) return;
+
+  const text = [
+    `Nama: ${entry.nama || "-"}`,
+    `Tgl Lahir: ${entry.tglLahir || "-"}`,
+    `Tiket: ${entry.tiket || "-"}`,
+    `Status: ${entry.status || "-"}`,
+    `Keterangan: ${entry.keterangan || "-"}`,
+    `Waktu: ${entry.tanggalJam || "-"}`,
+  ].join("\n");
+
+  try {
+    await navigator.clipboard.writeText(text);
+    Swal.fire({
+      icon: "success",
+      title: "Tersalin!",
+      timer: 1200,
+      showConfirmButton: false,
+      toast: true,
+      position: "top-end",
+    });
+  } catch (e) {
+    Swal.fire({
+      title: "Copy Manual",
+      input: "textarea",
+      inputValue: text,
+      inputAttributes: { readonly: true },
+      confirmButtonText: "Tutup",
+    });
+  }
+}
+
+// ==================== HANDLER: HAPUS LOG ====================
+async function handleDeleteLog(idx) {
+  const entry = byDateLogEntries[idx];
+  if (!entry) return;
+
+  const confirm = await Swal.fire({
+    icon: "warning",
+    title: "Hapus dari log?",
+    html: `Baris <b>${escapeHTML(entry.nama)}</b> akan dihapus.`,
+    showCancelButton: true,
+    confirmButtonColor: "#dc2626",
+    confirmButtonText: "Ya, Hapus",
+    cancelButtonText: "Batal",
+  });
+  if (!confirm.isConfirmed) return;
+
+  byDateLogEntries.splice(idx, 1);
+  renderUlangLogTable();
+
+  Swal.fire({
+    icon: "success",
+    title: "Terhapus",
+    timer: 1000,
+    showConfirmButton: false,
+  });
+}
+
+// ==================== RE-RENDER LOG TABLE (AKSI DI PALING AWAL) ====================
+function renderUlangLogTable() {
+  const tbody = document.getElementById("byDateLogBody");
+  const counter = document.getElementById("byDateLogCounter");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  if (!byDateLogEntries || byDateLogEntries.length === 0) {
+    if (counter) counter.textContent = "0";
+    return;
+  }
+
+  byDateLogEntries.forEach((entry, i) => {
+    entry.no = i + 1; // renumber
+
+    const tr = document.createElement("tr");
+    tr.dataset.index = String(i);
+    tr.dataset.status = entry.status || "";
+
+    if (entry.status === "OK") tr.className = "log-row-ok";
+    else if (entry.status === "SKIP") tr.className = "log-row-skip";
+    else if (entry.status === "WARN") tr.className = "log-row-warn";
+    else if (entry.status === "GAGAL" || entry.status === "ERROR")
+      tr.className = "log-row-fail";
+
+    const badge = getStatusBadgeHTML(entry.status);
+    const waktu = formatTimeShort(entry.timestamp);
+
+    // ✅ Kolom Aksi di PALING AWAL
+    tr.innerHTML = `
+      <td class="text-center">${renderAksiDropdownHTML(entry, i)}</td>
+      <td class="text-muted">${entry.no}</td>
+      <td>${escapeHTML(entry.nama)}</td>
+      <td>${escapeHTML(entry.tglLahir)}</td>
+      <td><code style="font-size:0.72rem">${escapeHTML(entry.tiket)}</code></td>
+      <td class="text-center">${badge}</td>
+      <td class="small">${escapeHTML(entry.keterangan)}</td>
+      <td class="text-muted small">${waktu}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (counter) counter.textContent = String(byDateLogEntries.length);
+}
+
+// ==================== UTILITY: BADGE STATUS ====================
+function getStatusBadgeHTML(status) {
+  const s = String(status || "").toUpperCase();
+  if (s === "OK") return `<span class="badge bg-success">OK</span>`;
+  if (s === "SKIP") return `<span class="badge bg-info text-dark">SKIP</span>`;
+  if (s === "WARN") return `<span class="badge bg-warning text-dark">WARN</span>`;
+  if (s === "GAGAL" || s === "FAIL") return `<span class="badge bg-danger">GAGAL</span>`;
+  if (s === "ERROR") return `<span class="badge bg-danger">ERROR</span>`;
+  return `<span class="badge bg-secondary">${escapeHTML(s || "-")}</span>`;
+}
+
+// ==================== UTILITY: ESCAPE HTML ====================
+function escapeHTML(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ==================== UTILITY: FORMAT WAKTU ====================
+function formatTimeShort(isoString) {
+  if (!isoString) return "-";
+  try {
+    const d = new Date(isoString);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${hh}.${mm}.${ss}`;
+  } catch (e) {
+    return "-";
+  }
+}
+
+// ==================== CLEAR LOG ====================
 function clearByDateLog() {
   const tbody = document.getElementById("byDateLogBody");
   const counter = document.getElementById("byDateLogCounter");
   if (tbody) tbody.innerHTML = "";
   if (counter) counter.textContent = "0";
-  byDateLogEntries = []; // ✅ reset buffer juga
+  byDateLogEntries = [];
+  window.__byDateLogData = byDateLogEntries;
 }
 
-// ==================== ✅ DOWNLOAD LOG EXCEL ====================
+// ==================== DOWNLOAD LOG EXCEL ====================
 function downloadByDateLogExcel() {
   if (byDateLogEntries.length === 0) {
     Swal.fire({
@@ -950,7 +1280,6 @@ function downloadByDateLogExcel() {
     return;
   }
 
-  // Bangun rows — kolom rapi
   const rows = byDateLogEntries.map((e) => ({
     No: e.no,
     Nama: e.nama,
@@ -962,16 +1291,14 @@ function downloadByDateLogExcel() {
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
-
-  // Atur lebar kolom biar rapi
   ws["!cols"] = [
-    { wch: 5 }, // No
-    { wch: 25 }, // Nama
-    { wch: 15 }, // Tgl Lahir
-    { wch: 15 }, // Tiket
-    { wch: 10 }, // Status
-    { wch: 45 }, // Keterangan
-    { wch: 20 }, // Tanggal & Jam
+    { wch: 5 },
+    { wch: 25 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 45 },
+    { wch: 20 },
   ];
 
   const wb = XLSX.utils.book_new();
@@ -990,3 +1317,4 @@ function downloadByDateLogExcel() {
 // ==================== EXPOSE KE GLOBAL (untuk robot by-date) ====================
 window.appendByDateLog = appendByDateLog;
 window.clearByDateLog = clearByDateLog;
+window.handleRetryFromLog = handleRetryFromLog;
