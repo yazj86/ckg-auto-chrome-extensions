@@ -1,5 +1,13 @@
 // ==================== GLOBAL STATE ====================
 let currentMode = REGISTRATION_MODES.INDIVIDUAL;
+let byDateLogEntries = []; // ✅ buffer untuk export Excel
+
+// ==================== KONFIGURASI HALAMAN PERSIAPAN ====================
+const PREPARATION_PAGES = {
+  [REGISTRATION_MODES.INDIVIDUAL]: "data-preparation-individu.html",
+  [REGISTRATION_MODES.SCHOOL]: "data-preparation-sekolah.html",
+  "by-date": "data-preparation-by-date.html",
+};
 
 // ==================== WRAPPER RUN PENDAFTARAN ====================
 async function runPendaftaran(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
@@ -23,23 +31,26 @@ async function runKehadiran(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
 
 // ==================== HELPER: BUKA HALAMAN PERSIAPAN DATA ====================
 async function openDataPreparation(mode) {
-  const url = chrome.runtime.getURL(
-    mode === REGISTRATION_MODES.SCHOOL
-      ? "data-preparation-sekolah.html"
-      : "data-preparation-individu.html",
-  );
+  const relativePath = PREPARATION_PAGES[mode];
+
+  if (!relativePath) {
+    console.error(`Mode persiapan tidak dikenal: ${mode}`);
+    showErrorSwal(`Mode persiapan "${mode}" belum terdaftar.`);
+    return;
+  }
+
+  const url = chrome.runtime.getURL(relativePath);
 
   try {
     const tabs = await chrome.tabs.query({ url });
+
     if (tabs.length > 0) {
-      // Jika sudah ada, fokuskan ke tab tersebut
       const tab = tabs[0];
       await chrome.tabs.update(tab.id, { active: true });
       if (tab.windowId) {
         await chrome.windows.update(tab.windowId, { focused: true });
       }
     } else {
-      // Jika belum ada, buka tab baru
       await chrome.tabs.create({ url });
     }
   } catch (err) {
@@ -48,22 +59,11 @@ async function openDataPreparation(mode) {
   }
 }
 
-// ==================== EVENT LISTENERS: OPEN DATA PREPARATION ====================
-document
-  .getElementById("openDataPreparationIndividu")
-  .addEventListener("click", () => {
-    openDataPreparation(REGISTRATION_MODES.INDIVIDU);
-  });
-
-document
-  .getElementById("openDataPreparationSekolah")
-  .addEventListener("click", () => {
-    openDataPreparation(REGISTRATION_MODES.SCHOOL);
-  });
-
 // ==================== DOM CONTENT LOADED ====================
 document.addEventListener("DOMContentLoaded", () => {
-  // Inisialisasi tanggal pemeriksaan untuk individu
+  // ------------------------------------------------------------
+  // 1) Inisialisasi tanggal pemeriksaan untuk individu
+  // ------------------------------------------------------------
   if (!localStorage.getItem(LOCAL_STORAGE.TGL_PEMERIKSAAN)) {
     const defaultTanggal = String(new Date().getDate());
     localStorage.setItem(LOCAL_STORAGE.TGL_PEMERIKSAAN, defaultTanggal);
@@ -73,28 +73,165 @@ document.addEventListener("DOMContentLoaded", () => {
   loadDataTable(currentMode);
   initRunSetting();
 
-  document
-    .getElementById("btnRefreshIndividu")
-    .addEventListener("click", () =>
+  // ------------------------------------------------------------
+  // 2) Event listener: Tombol Persiapan Data
+  // ------------------------------------------------------------
+  const btnPrepIndividu = document.getElementById(
+    "openDataPreparationIndividu",
+  );
+  if (btnPrepIndividu) {
+    btnPrepIndividu.addEventListener("click", () =>
+      openDataPreparation(REGISTRATION_MODES.INDIVIDUAL),
+    );
+  }
+
+  const btnPrepSekolah = document.getElementById("openDataPreparationSekolah");
+  if (btnPrepSekolah) {
+    btnPrepSekolah.addEventListener("click", () =>
+      openDataPreparation(REGISTRATION_MODES.SCHOOL),
+    );
+  }
+
+  const btnPrepByDate = document.getElementById("openDataPreparationByDate");
+  if (btnPrepByDate) {
+    btnPrepByDate.addEventListener("click", () =>
+      openDataPreparation("by-date"),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 3) Event listener: Tombol-tombol utama
+  // ------------------------------------------------------------
+  const btnRefreshIndividu = document.getElementById("btnRefreshIndividu");
+  if (btnRefreshIndividu) {
+    btnRefreshIndividu.addEventListener("click", () =>
       loadDataTable(REGISTRATION_MODES.INDIVIDUAL),
     );
-  document
-    .getElementById("btnRefreshSekolah")
-    .addEventListener("click", () => loadDataTable(REGISTRATION_MODES.SCHOOL));
-  document
-    .getElementById("runProcessBtn")
-    .addEventListener("click", runProcess);
-  document
-    .getElementById("btnRefreshSummary")
-    .addEventListener("click", renderSummary);
+  }
 
-  // Tab switching
-  document
-    .getElementById("tab-individu")
-    .addEventListener("click", () => switchMode(REGISTRATION_MODES.INDIVIDUAL));
-  document
-    .getElementById("tab-sekolah")
-    .addEventListener("click", () => switchMode(REGISTRATION_MODES.SCHOOL));
+  const btnRefreshSekolah = document.getElementById("btnRefreshSekolah");
+  if (btnRefreshSekolah) {
+    btnRefreshSekolah.addEventListener("click", () =>
+      loadDataTable(REGISTRATION_MODES.SCHOOL),
+    );
+  }
+
+  const runProcessBtn = document.getElementById("runProcessBtn");
+  if (runProcessBtn) {
+    runProcessBtn.addEventListener("click", runProcess);
+  }
+
+  const btnRefreshSummary = document.getElementById("btnRefreshSummary");
+  if (btnRefreshSummary) {
+    btnRefreshSummary.addEventListener("click", renderSummary);
+  }
+
+  // ------------------------------------------------------------
+  // 4) Tab switching
+  // ------------------------------------------------------------
+  const tabIndividu = document.getElementById("tab-individu");
+  if (tabIndividu) {
+    tabIndividu.addEventListener("click", () =>
+      switchMode(REGISTRATION_MODES.INDIVIDUAL),
+    );
+  }
+
+  const tabSekolah = document.getElementById("tab-sekolah");
+  if (tabSekolah) {
+    tabSekolah.addEventListener("click", () =>
+      switchMode(REGISTRATION_MODES.SCHOOL),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 5) PEMERIKSAAN BY DATE — Init
+  // ------------------------------------------------------------
+  const inputTglDari = document.getElementById("inputTglDari");
+  const inputTglSampai = document.getElementById("inputTglSampai");
+  const runByDateBtn = document.getElementById("runByDateBtn");
+  const stopByDateBtn = document.getElementById("stopByDateBtn");
+  const clearByDateLogBtn = document.getElementById("clearByDateLogBtn");
+  const downloadByDateLogBtn = document.getElementById(
+    "downloadByDateLogBtn",
+  );
+
+  if (inputTglDari) {
+    inputTglDari.value =
+      localStorage.getItem(LOCAL_STORAGE.BY_DATE_DARI) || "";
+    inputTglDari.addEventListener("change", function () {
+      localStorage.setItem(LOCAL_STORAGE.BY_DATE_DARI, this.value);
+      console.log("By Date - Dari:", this.value);
+    });
+  }
+
+  if (inputTglSampai) {
+    inputTglSampai.value =
+      localStorage.getItem(LOCAL_STORAGE.BY_DATE_SAMPAI) || "";
+    inputTglSampai.addEventListener("change", function () {
+      localStorage.setItem(LOCAL_STORAGE.BY_DATE_SAMPAI, this.value);
+      console.log("By Date - Sampai:", this.value);
+    });
+  }
+
+  if (runByDateBtn) {
+    runByDateBtn.addEventListener("click", handlePemeriksaanByDate);
+  }
+
+  if (stopByDateBtn) {
+    stopByDateBtn.addEventListener("click", () => {
+      window.__byDateStop = true;
+      appendPanelMessage("⏹️ Permintaan stop dikirim...");
+    });
+  }
+
+  if (clearByDateLogBtn) {
+    clearByDateLogBtn.addEventListener("click", clearByDateLog);
+  }
+
+  // ✅ NEW: tombol download log Excel
+  if (downloadByDateLogBtn) {
+    downloadByDateLogBtn.addEventListener("click", downloadByDateLogExcel);
+  }
+
+  // ------------------------------------------------------------
+  // 6) Checkbox Mode Pemeriksaan by-date
+  // ------------------------------------------------------------
+  const byDateChkMulai = document.getElementById("byDateChkMulai");
+  const byDateChkMandiri = document.getElementById("byDateChkMandiri");
+
+  if (byDateChkMulai) {
+    byDateChkMulai.checked =
+      localStorage.getItem("by-date-chk-mulai") !== "false";
+    byDateChkMulai.addEventListener("change", function () {
+      localStorage.setItem("by-date-chk-mulai", String(this.checked));
+    });
+  }
+
+  if (byDateChkMandiri) {
+    byDateChkMandiri.checked =
+      localStorage.getItem("by-date-chk-mandiri") !== "false";
+    byDateChkMandiri.addEventListener("change", function () {
+      localStorage.setItem("by-date-chk-mandiri", String(this.checked));
+      // Sync ke run-setting.pemeriksaan.mandiri
+      const currentData = getRunSettingData();
+      currentData.pemeriksaan.mandiri = this.checked;
+      saveRunSettingData(currentData);
+    });
+  }
+
+  // ------------------------------------------------------------
+  // 7) Source tab (radio) by-date
+  // ------------------------------------------------------------
+  const srcBelum = document.getElementById("srcBelum");
+  const srcSedang = document.getElementById("srcSedang");
+  [srcBelum, srcSedang].forEach((radio) => {
+    if (!radio) return;
+    radio.addEventListener("change", function () {
+      if (this.checked) {
+        localStorage.setItem("by-date-source", this.value);
+      }
+    });
+  });
 });
 
 // ==================== MODE SWITCHING ====================
@@ -270,6 +407,8 @@ function summarizeColumn(colName) {
 
 function renderSummary() {
   const container = document.getElementById("summary");
+  if (!container) return;
+
   container.innerHTML = "";
   const cols = [
     "status_input",
@@ -359,10 +498,12 @@ function tandaiStatus(no, key, status) {
 // ==================== INISIALISASI RUN SETTING ====================
 function initRunSetting() {
   const currentData = getRunSettingData();
+
   document.querySelectorAll(".main-chk").forEach((input) => {
     const field = input.getAttribute("data-field");
     input.checked = !!currentData[field];
   });
+
   document.querySelectorAll(".sub-chk").forEach((input) => {
     const subField = input.getAttribute("data-subfield");
     input.checked = !!currentData.pemeriksaan[subField];
@@ -371,6 +512,7 @@ function initRunSetting() {
   function updatePemeriksaanParentStatus() {
     const parentInput = document.getElementById("chkPemeriksaan");
     const subGroup = document.getElementById("subPemeriksaanGroup");
+    if (!parentInput || !subGroup) return;
     const hasActiveChild = Object.values(currentData.pemeriksaan).some(
       (value) => value === true,
     );
@@ -388,17 +530,19 @@ function initRunSetting() {
   });
 
   const parentInput = document.getElementById("chkPemeriksaan");
-  parentInput.addEventListener("change", function () {
-    const isChecked = this.checked;
-    Object.keys(currentData.pemeriksaan).forEach((key) => {
-      currentData.pemeriksaan[key] = isChecked;
+  if (parentInput) {
+    parentInput.addEventListener("change", function () {
+      const isChecked = this.checked;
+      Object.keys(currentData.pemeriksaan).forEach((key) => {
+        currentData.pemeriksaan[key] = isChecked;
+      });
+      document.querySelectorAll(".sub-chk").forEach((input) => {
+        input.checked = isChecked;
+      });
+      updatePemeriksaanParentStatus();
+      saveRunSettingData(currentData);
     });
-    document.querySelectorAll(".sub-chk").forEach((input) => {
-      input.checked = isChecked;
-    });
-    updatePemeriksaanParentStatus();
-    saveRunSettingData(currentData);
-  });
+  }
 
   document.querySelectorAll(".sub-chk").forEach((input) => {
     input.addEventListener("change", function () {
@@ -561,9 +705,6 @@ async function runCheckPemeriksaan(
       allowNextProcess(eData.pemeriksaan) &&
       shouldRun(eData.pemeriksaan_mandiri)
     ) {
-      // ✅ FIX: kirim hanya (iData, mode)
-      // defDataPemeriksaan & pemeriksaanDataSchema diambil sendiri
-      // di dalam runPemeriksaanMandiri via getDefaultPemeriksaanData()
       eData = await runPemeriksaanMandiri(eData, mode);
     }
   } catch (err) {
@@ -574,3 +715,278 @@ async function runCheckPemeriksaan(
 
   return eData;
 }
+
+// ==================== ✅ PEMERIKSAAN BY DATE ====================
+async function handlePemeriksaanByDate() {
+  const tglDari = localStorage.getItem(LOCAL_STORAGE.BY_DATE_DARI) || "";
+  const tglSampai = localStorage.getItem(LOCAL_STORAGE.BY_DATE_SAMPAI) || "";
+
+  // ------------------------------------------------------------
+  // ✅ Validasi wajib (tanggal akan diteruskan ke robot)
+  // ------------------------------------------------------------
+  if (!tglDari || !tglSampai) {
+    Swal.fire({
+      icon: "warning",
+      title: "Tanggal belum diisi",
+      text: "Isi dulu 'Catatan Dari' dan 'Catatan Sampai' sebelum menjalankan.",
+    });
+    return;
+  }
+
+  if (new Date(tglDari) > new Date(tglSampai)) {
+    Swal.fire({
+      icon: "warning",
+      title: "Rentang tidak valid",
+      text: "'Dari' tidak boleh lebih besar dari 'Sampai'.",
+    });
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // Ambil opsi dari checkbox by-date
+  // ------------------------------------------------------------
+  const chkMulai = document.getElementById("byDateChkMulai");
+  const chkMandiri = document.getElementById("byDateChkMandiri");
+  const optMulai = chkMulai ? chkMulai.checked : true;
+  const optMandiri = chkMandiri ? chkMandiri.checked : true;
+
+  const srcChecked =
+    document.querySelector('input[name="byDateSource"]:checked');
+  const sourceTab = srcChecked ? srcChecked.value : "Belum Pemeriksaan";
+
+  // ------------------------------------------------------------
+  // Info ke dialog konfirmasi
+  // ------------------------------------------------------------
+  const infoTgl = `
+    <br>
+    <div style="background:#e8f5f7;padding:8px 12px;border-radius:6px;margin-top:8px">
+      📅 <b>Filter:</b> ${tglDari} s/d ${tglSampai}<br>
+      📋 <b>Sumber tab:</b> ${sourceTab}<br>
+      🩺 <b>Mulai Pemeriksaan:</b> ${optMulai ? "✅" : "❌"}<br>
+      📝 <b>Isi Form Mandiri:</b> ${optMandiri ? "✅" : "❌"}
+    </div>
+  `;
+
+  const confirm = await Swal.fire({
+    title: "Pemeriksaan by Date",
+    html: `
+      <div style="text-align:left;font-size:0.9rem">
+        <p>Robot akan memproses <b>semua peserta</b> di halaman pelayanan (sesuai filter tanggal yang sudah Anda set di web sehat), satu per satu, secara otomatis.</p>
+        <ul style="margin:0.5rem 0;padding-left:1.2rem">
+          <li>Pastikan sudah buka <code>ckg-pelayanan</code></li>
+          <li>Pastikan filter tanggal sudah di-set</li>
+          <li>Tab default = "Belum Pemeriksaan"</li>
+        </ul>
+        ${infoTgl}
+      </div>
+    `,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Jalankan",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#8b5cf6",
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  // ------------------------------------------------------------
+  // Cek fungsi tersedia
+  // ------------------------------------------------------------
+  if (typeof runPemeriksaanByDate !== "function") {
+    showErrorSwal(
+      "Fungsi runPemeriksaanByDate tidak ditemukan. Pastikan file robot-pemeriksaan-by-date.js sudah dimuat.",
+    );
+    return;
+  }
+
+  // Reset flag stop + log
+  window.__byDateStop = false;
+
+  showLoading();
+  const stopBtn = document.getElementById("stopByDateBtn");
+  if (stopBtn) stopBtn.classList.remove("d-none");
+
+  showPanelMessage("📅 Memulai Pemeriksaan by Date (auto loop)...");
+  clearByDateLog();
+
+  try {
+    // ✅ Kirim filter + opsi ke robot
+    const result = await runPemeriksaanByDate(currentMode, {
+      dari: tglDari,
+      sampai: tglSampai,
+      sourceTab,
+      mulai: optMulai,
+      mandiri: optMandiri,
+    });
+
+    hideLoading();
+    if (stopBtn) stopBtn.classList.add("d-none");
+
+    if (result && result.stats) {
+      const s = result.stats;
+      appendPanelMessage(
+        `\n📊 Selesai — Diproses: ${s.processed}, Skip: ${s.skipped}, Gagal: ${s.failed}`,
+      );
+
+      if (s.errors && s.errors.length > 0) {
+        appendPanelMessage(
+          `\n⚠️ Error detail (max 5):\n${s.errors.slice(0, 5).join("\n")}`,
+        );
+      }
+
+      Swal.fire({
+        title: "Selesai!",
+        html: `
+          <div style="text-align:left">
+            <p><b>Hasil Akhir:</b></p>
+            <ul style="padding-left:1.2rem;margin:0">
+              <li>Berhasil diproses: <b>${s.processed}</b></li>
+              <li>Skip (sudah diproses): <b>${s.skipped}</b></li>
+              <li>Gagal: <b>${s.failed}</b></li>
+            </ul>
+            <p style="margin-top:12px;font-size:0.85rem;color:#6b7280">
+              💡 Klik "Download Excel" di panel untuk simpan log sebagai dokumentasi.
+            </p>
+          </div>
+        `,
+        icon: s.failed === 0 ? "success" : "warning",
+      });
+    } else {
+      Swal.fire({
+        title: "Selesai",
+        text: result?.message || "Proses selesai.",
+        icon: "info",
+      });
+    }
+  } catch (err) {
+    hideLoading();
+    if (stopBtn) stopBtn.classList.add("d-none");
+    console.error("Error di handlePemeriksaanByDate:", err);
+    showErrorSwal(`Error: ${err.message}`);
+  }
+}
+
+// ==================== ✅ BY-DATE LOG TABLE ====================
+function appendByDateLog({ nama, tglLahir, tiket, status, keterangan }) {
+  const tbody = document.getElementById("byDateLogBody");
+  const counter = document.getElementById("byDateLogCounter");
+  if (!tbody) return;
+
+  const idx = byDateLogEntries.length + 1;
+  const now = new Date();
+  const waktu = now.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  // ✅ Simpan ke buffer untuk export Excel
+  byDateLogEntries.push({
+    no: idx,
+    nama: nama || "",
+    tglLahir: tglLahir || "",
+    tiket: tiket || "",
+    status: status || "",
+    keterangan: keterangan || "",
+    tanggalJam: now.toLocaleString("id-ID"),
+  });
+
+  let badge = `<span class="badge bg-secondary">${status}</span>`;
+  let rowClass = "";
+  if (status === "OK") {
+    badge = `<span class="badge bg-success">OK</span>`;
+    rowClass = "log-row-ok";
+  } else if (status === "SKIP") {
+    badge = `<span class="badge bg-info text-dark">SKIP</span>`;
+    rowClass = "log-row-skip";
+  } else if (status === "GAGAL" || status === "FAIL") {
+    badge = `<span class="badge bg-danger">GAGAL</span>`;
+    rowClass = "log-row-fail";
+  } else if (status === "WARN") {
+    badge = `<span class="badge bg-warning text-dark">WARN</span>`;
+    rowClass = "log-row-warn";
+  }
+
+  const tr = document.createElement("tr");
+  if (rowClass) tr.className = rowClass;
+  tr.innerHTML = `
+    <td>${idx}</td>
+    <td>${nama || "-"}</td>
+    <td>${tglLahir || "-"}</td>
+    <td>${tiket || "-"}</td>
+    <td class="text-center">${badge}</td>
+    <td>${keterangan || "-"}</td>
+    <td>${waktu}</td>
+  `;
+  tbody.appendChild(tr);
+  tr.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  if (counter) counter.textContent = String(idx);
+}
+
+function clearByDateLog() {
+  const tbody = document.getElementById("byDateLogBody");
+  const counter = document.getElementById("byDateLogCounter");
+  if (tbody) tbody.innerHTML = "";
+  if (counter) counter.textContent = "0";
+  byDateLogEntries = []; // ✅ reset buffer juga
+}
+
+// ==================== ✅ DOWNLOAD LOG EXCEL ====================
+function downloadByDateLogExcel() {
+  if (byDateLogEntries.length === 0) {
+    Swal.fire({
+      icon: "info",
+      title: "Log kosong",
+      text: "Belum ada log untuk diunduh.",
+    });
+    return;
+  }
+
+  if (typeof XLSX === "undefined") {
+    showErrorSwal(
+      "Library XLSX tidak tersedia. Tambahkan <script src='lib/xlsx.full.min.js'></script> di panel.html.",
+    );
+    return;
+  }
+
+  // Bangun rows — kolom rapi
+  const rows = byDateLogEntries.map((e) => ({
+    No: e.no,
+    Nama: e.nama,
+    "Tgl Lahir": e.tglLahir,
+    Tiket: e.tiket,
+    Status: e.status,
+    Keterangan: e.keterangan,
+    "Tanggal & Jam": e.tanggalJam,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Atur lebar kolom biar rapi
+  ws["!cols"] = [
+    { wch: 5 }, // No
+    { wch: 25 }, // Nama
+    { wch: 15 }, // Tgl Lahir
+    { wch: 15 }, // Tiket
+    { wch: 10 }, // Status
+    { wch: 45 }, // Keterangan
+    { wch: 20 }, // Tanggal & Jam
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Log By Date");
+
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  XLSX.writeFile(wb, `CKG-ByDate-Log_${stamp}.xlsx`);
+
+  console.log(
+    `%c[EXPORT]%c Log By Date (${byDateLogEntries.length} baris) → Excel`,
+    "background:#0f8a5f;color:#fff;padding:2px 6px;border-radius:4px;font-weight:700",
+    "color:#0f8a5f;font-weight:600",
+  );
+}
+
+// ==================== EXPOSE KE GLOBAL (untuk robot by-date) ====================
+window.appendByDateLog = appendByDateLog;
+window.clearByDateLog = clearByDateLog;

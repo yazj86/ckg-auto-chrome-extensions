@@ -4,7 +4,14 @@ const LOCAL_STORAGE = {
   DEFAULT_DATA: "default-data",
   DEFAULT_DATA_PEMERIKSAAN: "default-data-pemeriksaan",
   TGL_PEMERIKSAAN: "tgl-pemeriksaan",
+  BY_DATE_DARI: "by-date-dari",
+  BY_DATE_SAMPAI: "by-date-sampai",
+
+  // ✅ NEW: Excel target & sumber peserta by-date
+  BY_DATE_EXCEL_TARGETS: "by-date-excel-targets",
+  BY_DATE_PESERTA_SOURCE: "by-date-peserta-source",
 };
+
 
 const FrekuensiDuaMingguOptions = [
   "Tidak sama sekali",
@@ -23,6 +30,16 @@ const PerkawinanOptions = [
   "Cerai Hidup",
   "Cerai Mati",
 ];
+
+// ==================== DEFAULT STATUS PERKAWINAN BY USIA ====================
+// Mapping: status_usia → default status_perkawinan
+// Dipakai oleh background.js saat isi form demografi
+const defaultStatusPerkawinanByUsia = {
+  BALITA: "Belum Menikah",
+  SEKOLAH: "Belum Menikah",
+  LANSIA: "Menikah", // ⬅️ bisa diubah sesuai kebijakan
+  // "" (dewasa 18-59 tahun) → pakai field.default
+};
 
 const StatusOptions = ["OK", "MANUAL", "GAGAL", "LEWATI"];
 
@@ -816,8 +833,8 @@ function allowNextProcess(val = "") {
 }
 
 const defaultRunSettingData = {
-  pendaftaran: true,
-  kehadiran: true,
+  pendaftaran: false,
+  kehadiran: false,
   rapor: false,
   ignorePrerequisites: false,
   pemeriksaan: {
@@ -887,6 +904,7 @@ const pemeriksaanDataSchema = {
         required: true,
         default: "Belum Menikah",
         options: PerkawinanOptions,
+        defaultByStatusUsia: defaultStatusPerkawinanByUsia,
       },
       {
         key: "status_disabilitas",
@@ -909,6 +927,7 @@ const pemeriksaanDataSchema = {
         required: true,
         default: "Belum Menikah",
         options: PerkawinanOptions,
+        defaultByStatusUsia: defaultStatusPerkawinanByUsia,
       },
       {
         key: "status_hamil",
@@ -939,6 +958,7 @@ const pemeriksaanDataSchema = {
         required: true,
         default: "Belum Menikah",
         options: PerkawinanOptions,
+        defaultByStatusUsia: defaultStatusPerkawinanByUsia,
       },
       {
         key: "status_disabilitas",

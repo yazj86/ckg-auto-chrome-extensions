@@ -192,6 +192,31 @@ function parseDateString(dateStr) {
   };
 }
 
+/**
+ * Konversi DD-MM-YYYY → DD MMM YYYY
+ * Contoh: "04-08-1996" → "4 Agt 1996"
+ *
+ * Berguna untuk mencocokkan tanggal dengan tampilan UI yang formatnya
+ * "hari bulan tahun" (bulan 3 huruf Indonesia, hari tanpa leading zero).
+ *
+ * @param {string} tglExcel - Tanggal format DD-MM-YYYY
+ * @returns {string} Tanggal format "DD MMM YYYY"
+ */
+function convertTgl(tglExcel) {
+  if (!tglExcel) return "";
+  const parts = String(tglExcel).split("-");
+  if (parts.length !== 3) return String(tglExcel);
+
+  const [dd, mm, yyyy] = parts;
+  const bulanIndo = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agt", "Sep", "Okt", "Nov", "Des",
+  ];
+  const bulan = bulanIndo[parseInt(mm, 10) - 1] || mm;
+  // Format: hari tanpa leading zero, spasi, bulan, spasi, tahun
+  return `${parseInt(dd, 10)} ${bulan} ${yyyy}`;
+}
+
 function cleanPhoneNumber(phone, defPhone = "") {
   if (!phone) return defPhone;
   let cleaned = phone.toString().replace(/\D/g, "");
@@ -273,15 +298,23 @@ function waitForElement(xpath, callback, parentEl, maxTries = 10) {
       setTimeout(tryFind, delay);
     } else {
       console.warn("Element not found after", maxTries, "attempts", xpath);
-      callback(null); // <- tambahan, panggil callback dengan null agar waitForElementAsync bisa reject
+      callback(null); // ← panggil callback dengan null agar bisa reject
     }
   }
   tryFind();
 }
 
+/**
+ * Force click ke elemen.
+ * ⚠️ TIDAK pakai scrollIntoView (bisa tutup dropdown)
+ * ⚠️ TIDAK pakai native el.click() (bisa double-click)
+ *
+ * Untuk dropdown option, pakai clickElement() saja.
+ * Untuk tombol/checkbox yang butuh event lengkap, pakai forceClick().
+ */
 function forceClick(el) {
   if (!el) return;
-  el.scrollIntoView({ block: "center", behavior: "instant" });
+
   el.dispatchEvent(
     new MouseEvent("mousedown", {
       bubbles: true,
@@ -297,12 +330,12 @@ function forceClick(el) {
     }),
   );
   el.dispatchEvent(
-    new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }),
   );
-  // Fallback native click
-  if (typeof el.click === "function") {
-    el.click();
-  }
 }
 
 function clickElement(el) {
@@ -317,11 +350,28 @@ function clickElement(el) {
   }
 }
 
+/**
+ * Isi nilai input dengan native setter (Vue/React-friendly).
+ * Fallback ke el.value kalau native setter tidak tersedia.
+ */
 function inputElementValue(el, val) {
-  if (el) {
+  if (!el) return;
+
+  const proto =
+    el.tagName === "TEXTAREA"
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+
+  if (setter) {
+    setter.call(el, String(val));
+  } else {
     el.value = val;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
   }
+
+  ["input", "change", "blur"].forEach((e) =>
+    el.dispatchEvent(new Event(e, { bubbles: true })),
+  );
 }
 
 const forceInput = (el, val) => {
@@ -389,11 +439,19 @@ async function sleepUntilLoaded(ms = 500, text = "Memuat data", maxRetry = 20) {
   return true; // jangan throw
 }
 
+/**
+ * Tunggu elemen muncul, dengan flag `settled` untuk cegah timer leak.
+ * @returns {Promise<Element>}
+ */
 function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const startTime = Date.now();
     const interval = 200;
+
     function check() {
+      if (settled) return;
+
       const element = document.evaluate(
         xpathOrSelector,
         parentEl || document,
@@ -401,14 +459,18 @@ function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
         XPathResult.FIRST_ORDERED_NODE_TYPE,
         null,
       ).singleNodeValue;
+
       if (element) {
+        settled = true;
         resolve(element);
       } else if (Date.now() - startTime > timeout) {
+        settled = true;
         reject(new Error(`Timeout waiting for: ${xpathOrSelector}`));
       } else {
         setTimeout(check, interval);
       }
     }
+
     check();
   });
 }
@@ -575,11 +637,19 @@ function getPekerjaanLabel(pekerjaan) {
     "": "lainnya",
   };
 
-  // Normalisasi input: lowercase, trim, hilangkan spasi berlebih
+  const inputNormalized = pekerjaan.toLowerCase().trim();
+
+  // ✅ FIX: Cek 1 — Apakah input sudah persis label?
+  const directMatch = listPekerjaan.find(
+    (it) => it.label.toLowerCase() === inputNormalized,
+  );
+  if (directMatch) return directMatch.label;
+
+  // ✅ Cek 2 — Cek via mapping sinonim
   const key = pekerjaan.toLowerCase().trim().replace(/\s+/g, " ");
   const value = occupationMap[key] || "lainnya";
-  const findPekerjaan = listPekerjaan.find((it) => it.value === value);
-  return findPekerjaan ? findPekerjaan.label : "Lainnya";
+  const found = listPekerjaan.find((it) => it.value === value);
+  return found ? found.label : "Lainnya";
 }
 
 function toSnakeCase(str) {
@@ -779,17 +849,24 @@ const X_PATH = {
   BTN_DAFTAR_TANPA_WALI:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[3]/div[5]/div[2]/div/div/div[4]/div/form/div[5]/div[2]/button",
 
-  // PEMERIKSAAN
+  // ==================== PEMERIKSAAN ====================
   SELECT_SEARCH_PELAYANAN:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div[2]/div[1]/div/div[2]",
   SELECT_SEARCH_NAMA_PELAYANAN:
-    "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div[2]/div[1]/div/div[3]/div/div[3]",
+    "//div[contains(@class,'cursor-pointer') and contains(@class,'py-2') and contains(@class,'px-4') and normalize-space(.)='Nama']",
   SELECT_SEARCH_NIK_PELAYANAN:
-    "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div[2]/div[1]/div/div[3]/div/div[3]",
+    "//div[contains(@class,'cursor-pointer') and contains(@class,'py-2') and contains(@class,'px-4') and normalize-space(.)='NIK']",
+  SELECT_SEARCH_NOMOR_TIKET_PELAYANAN:
+    "//div[contains(@class,'cursor-pointer') and contains(@class,'py-2') and contains(@class,'px-4') and normalize-space(.)='Nomor Tiket']",
+
   INPUT_SEARCH_PELAYANAN:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div[2]/div[2]/label/div/input",
   INPUT_SEARCH_NIK_PELAYANAN:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div/div[2]/label/div/input",
+
+  INPUT_SEARCH_NAMA_PELAYANAN:
+    "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[2]/div/div[2]/label/div/input",
+
   BTN_MULAI_PELAYANAN:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[4]/div[3]/div/table/tbody/tr/td[9]/div/div/button",
   BTN_MULAI_PEMERIKSAAN: ".//button[normalize-space(.)='Mulai Pemeriksaan']",

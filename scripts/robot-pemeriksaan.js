@@ -5,13 +5,13 @@ async function runPemeriksaan(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
     `🩺 Mulai Pemeriksaan untuk ${iData.no}-${iData.nik}-${iData.nama}`,
   );
 
-  // ✅ Ambil default peserta (bukan default pemeriksaan)
+  // Ambil default peserta
   const defData = getDefaultData(mode);
 
-  // ✅ URL sebagai STRING (helper sudah handle mode)
+  // URL sebagai STRING
   const url = getPelayananUrl(mode);
 
-  // ✅ Tanggal pemeriksaan dari localStorage panel
+  // Tanggal pemeriksaan dari localStorage panel
   const tgl_pemeriksaan = localStorage.getItem(LOCAL_STORAGE.TGL_PEMERIKSAAN);
 
   let result;
@@ -43,9 +43,17 @@ async function runPemeriksaan(iData, mode = REGISTRATION_MODES.INDIVIDUAL) {
     `Konfirmasi Mulai Pemeriksaan. Status: ${result.status} - ${result.message}`,
   );
 
+  // ============================================================
+  // HANDLE HASIL
+  // ============================================================
   if (result.success) {
     iData.pemeriksaan = "OK";
     iData.status_input = result.status;
+    iData.keterangan = result.message;
+  } else if (result.status === "SKIP") {
+    // ✅ Peserta tidak ditemukan → tandai LEWATI, robot tetap lanjut
+    iData.pemeriksaan = "LEWATI";
+    iData.status_input = "SKIP";
     iData.keterangan = result.message;
   } else {
     if (result.status === "ERROR" || result.status === "TIMEOUT") {
@@ -67,11 +75,11 @@ async function runPemeriksaanAutofill({
   url,
   tgl_pemeriksaan,
 }) {
-  // ✅ Pakai TAB AKTIF (bukan query by origin)
+  // Pakai TAB AKTIF
   let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const targetTabId = tab.id;
 
-  // ✅ Redirect ke URL target (url sudah string)
+  // Redirect ke URL target
   await chrome.scripting.executeScript({
     target: { tabId: targetTabId },
     args: [url],
@@ -114,31 +122,131 @@ async function runPemeriksaanAutofill({
               const state = { earlyExit: null };
 
               const steps = [
+                // ============================================================
+                // STEP 1: Search Peserta (Nama → NIK Fallback)
+                // ============================================================
                 {
-                  name: "Select Search by NIK",
+                  name: "Search Peserta (Nama → NIK Fallback)",
                   action: async () => {
-                    logStatus("1. Pencarian by NIK...");
+                    // ----- Helper lokal: cari opsi dropdown -----
+                    const findDropdownOption = (text) => {
+                      return [...document.querySelectorAll("div.cursor-pointer")].find(
+                        (el) => {
+                          const cls = el.className || "";
+                          return (
+                            cls.includes("py-2") &&
+                            cls.includes("px-4") &&
+                            el.textContent.trim() === text
+                          );
+                        },
+                      );
+                    };
+
+                    const waitForDropdownOption = async (text, timeout = 5000) => {
+                      const start = Date.now();
+                      while (Date.now() - start < timeout) {
+                        const found = findDropdownOption(text);
+                        if (found) return found;
+                        await sleep(200);
+                      }
+                      return null;
+                    };
+
+                    // ============================================================
+                    // TAHAP 1: Cari by NAMA (UTAMA)
+                    // ============================================================
+                    logStatus("1. Coba pencarian by Nama...");
+
                     const selectSearch = await waitForElementAsync(
                       X_PATH.SELECT_SEARCH_PELAYANAN,
                     );
                     clickElement(selectSearch);
-                    await sleep(500);
+                    await sleep(800);
 
-                    const selectSearchNik = await waitForElementAsync(
-                      X_PATH.SELECT_SEARCH_NIK_PELAYANAN,
-                    );
-                    clickElement(selectSearchNik);
-                    await sleep(750);
+                    logStatus("   → Pilih opsi 'Nama'...");
+                    const optNama = await waitForDropdownOption("Nama");
+                    if (!optNama) throw new Error("Opsi 'Nama' tidak ditemukan");
+                    clickElement(optNama);
+                    await sleep(800);
 
-                    const inputSearchNik = await waitForElementAsync(
+                    const inputSearch = await waitForElementAsync(
                       X_PATH.INPUT_SEARCH_NIK_PELAYANAN,
+                      null,
+                      5000,
                     );
-                    forceInput(inputSearchNik, String(inData.nik));
+                    const namaBersih = String(inData.nama).split(",")[0].trim();
+                    logStatus(`   → Cari nama: "${namaBersih}"`);
+                    forceInput(inputSearch, namaBersih);
+                    await sleep(800);
+                    enterKeyElement(inputSearch);
+                    await sleepUntilLoaded(750, "Proses pencarian data", 20);
+
+                    await sleep(1000);
+                    const hasilRows = document.querySelectorAll("table tbody tr");
+                    const jumlahHasil = hasilRows.length;
+                    logStatus(`   → Hasil Nama: ${jumlahHasil} peserta`);
+
+                    // ✅ KASUS 1: Nama unik → LANGSUNG PAKAI
+                    if (jumlahHasil === 1) {
+                      logStatus("   ✅ Nama unik ditemukan. Pakai peserta ini.");
+                      return;
+                    }
+
+                    // ============================================================
+                    // TAHAP 2: Fallback ke NIK
+                    // ============================================================
+                    if (jumlahHasil === 0) {
+                      logStatus("   ⚠️ Nama tidak ditemukan. Fallback ke NIK...");
+                    } else {
+                      logStatus(
+                        `   ⚠️ Nama duplikat (${jumlahHasil} hasil). Fallback ke NIK...`,
+                      );
+                    }
+
+                    // Reset input
+                    forceInput(inputSearch, "");
                     await sleep(500);
-                    enterKeyElement(inputSearchNik);
-                    await sleepUntilLoaded();
+
+                    // Buka dropdown lagi
+                    clickElement(selectSearch);
+                    await sleep(800);
+
+                    // Pilih opsi "NIK"
+                    const optNik = await waitForDropdownOption("NIK");
+                    if (!optNik) throw new Error("Opsi 'NIK' tidak ditemukan");
+                    clickElement(optNik);
+                    await sleep(800);
+
+                    // Isi NIK
+                    logStatus(`   → Cari NIK: ${inData.nik}`);
+                    forceInput(inputSearch, String(inData.nik));
+                    await sleep(800);
+                    enterKeyElement(inputSearch);
+                    await sleepUntilLoaded(750, "Proses pencarian data", 20);
+
+                    await sleep(1000);
+                    const hasilNik = document.querySelectorAll("table tbody tr");
+                    logStatus(`   → Hasil NIK: ${hasilNik.length} peserta`);
+
+                    // ✅ KASUS 2: NIK ketemu → PAKAI
+                    if (hasilNik.length >= 1) {
+                      logStatus(`   ✅ NIK ditemukan: ${hasilNik.length} peserta.`);
+                      return;
+                    }
+
+                    // ⚠️ KASUS 3: Nama & NIK sama-sama gagal → SKIP
+                    logStatus("   ⚠️ NIK juga tidak ditemukan. Peserta di-skip.");
+                    state.earlyExit = {
+                      success: false,
+                      status: "SKIP",
+                      message: `Peserta tidak ditemukan. Nama="${namaBersih}", NIK=${inData.nik}`,
+                    };
                   },
                 },
+
+                // ============================================================
+                // STEP 2: Check which tab table
+                // ============================================================
                 {
                   name: "Check which tab table",
                   action: async () => {
@@ -165,6 +273,10 @@ async function runPemeriksaanAutofill({
                     }
                   },
                 },
+
+                // ============================================================
+                // STEP 3: Start Pemeriksaan
+                // ============================================================
                 {
                   name: "Start Pemeriksaan",
                   action: async () => {

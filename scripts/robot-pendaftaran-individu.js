@@ -444,20 +444,25 @@ async function runPendaftaranAutofillIndividu({
                           await waitForElementAsync(
                             `//div[text()='${inData.status_perkawinan || defData.status_perkawinan}']/ancestor::div[contains(@class,'cursor-pointer')]`,
                           );
-                        forceClick(statusPernikahanOption);
+                        clickElement(statusPernikahanOption);
                         await sleep(500);
                       } catch (err) {
                         console.warn("Ignore existing status pernikahan");
                       }
 
-                      const statusDisablitas = await waitForElementAsync(
-                        X_PATH.INPUT_STATUS_DISABILITAS,
-                      );
-                      clickElement(statusDisablitas);
-                      const statusDisabilitasOption = await waitForElementAsync(
-                        `//div[text()='${(inData.status_perkawinan || defData.status_perkawinan) == "YA" ? "Memiliki disabilitas" : "Tidak memiliki disabilitas"}']/ancestor::div[contains(@class,'cursor-pointer')]`,
-                      );
-                      clickElement(statusDisabilitasOption);
+                      const statusDisabilitasValue = String(
+  inData.status_disabilitas || defData.status_disabilitas || "TIDAK",
+).toUpperCase();
+
+const statusDisabilitasLabel =
+  statusDisabilitasValue === "YA"
+    ? "Memiliki disabilitas"
+    : "Tidak memiliki disabilitas";
+
+const statusDisabilitasOption = await waitForElementAsync(
+  `//div[text()='${statusDisabilitasLabel}']/ancestor::div[contains(@class,'cursor-pointer')]`,
+);
+clickElement(statusDisabilitasOption);
 
                       try {
                         async function selectPekerjaan() {

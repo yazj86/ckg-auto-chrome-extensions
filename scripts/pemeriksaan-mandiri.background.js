@@ -125,6 +125,13 @@ async function executeNextForm(tabId) {
 
 // ============================================================
 // FORM AUTOFILL (dijalankan di halaman /skrining-form)
+// Prioritas:
+//   1. iData[field.key]              → Excel per-peserta
+//   2. iData[defKey]                 → Excel format penuh
+//   3. iData[sourceKey]              → Excel via sourceKey
+//   4. defaultByStatusUsia[status]   → mapping by usia (NEW)
+//   5. defData[defKey]               → default dari halaman Persiapan
+//   6. field.default                 → hardcoded di schema
 // ============================================================
 async function runDynamicAutofillForm(
   schemaKey,
@@ -138,18 +145,76 @@ async function runDynamicAutofillForm(
     return;
   }
 
-  console.log(`[Robot] Memulai autofill untuk: ${sectionSchema.label}`);
+  console.log(`[Robot] ================== AUTOFILL START ==================`);
+  console.log(`[Robot] Schema: ${schemaKey} (${sectionSchema.label})`);
+  console.log(`[Robot] iData.status_usia:`, inData?.status_usia || "(kosong)");
+  console.log(`[Robot] iData.status_perkawinan:`, inData?.status_perkawinan || "(kosong)");
+
   await new Promise((r) => setTimeout(r, 1500));
 
   async function fillQuestion() {
     for (const field of sectionSchema.input) {
       const defKey = sectionSchema.key + "_" + field.key;
-      const valueToFill = defData[defKey] || field.default;
 
-      if (valueToFill === undefined || valueToFill === null || valueToFill === "")
+      // ============================================================
+      // ✅ PRIORITAS VALUE (dari yang paling tinggi):
+      // 1. iData[field.key]              → dari Excel per-peserta
+      // 2. iData[defKey]                 → dari Excel format penuh
+      // 3. iData[sourceKey]              → dari Excel via sourceKey
+      // 4. defaultByStatusUsia[status]   → mapping by usia (NEW)
+      // 5. defData[defKey]               → default dari halaman Persiapan
+      // 6. field.default                 → hardcoded di schema
+      // ============================================================
+      let valueToFill;
+      let valueSource = "";
+
+      if (inData && inData[field.key] !== undefined && inData[field.key] !== "") {
+        // PRIORITAS 1
+        valueToFill = inData[field.key];
+        valueSource = `iData[${field.key}]`;
+      } else if (inData && inData[defKey] !== undefined && inData[defKey] !== "") {
+        // PRIORITAS 2
+        valueToFill = inData[defKey];
+        valueSource = `iData[${defKey}]`;
+      } else if (
+        field.sourceKey &&
+        inData &&
+        inData[field.sourceKey] !== undefined &&
+        inData[field.sourceKey] !== ""
+      ) {
+        // PRIORITAS 3
+        valueToFill = inData[field.sourceKey];
+        valueSource = `iData[${field.sourceKey}]`;
+      } else if (
+        // PRIORITAS 4 (NEW): mapping default by status_usia
+        field.defaultByStatusUsia &&
+        inData &&
+        inData.status_usia &&
+        field.defaultByStatusUsia[inData.status_usia]
+      ) {
+        valueToFill = field.defaultByStatusUsia[inData.status_usia];
+        valueSource = `defaultByStatusUsia[${inData.status_usia}]`;
+      } else if (defData && defData[defKey] !== undefined && defData[defKey] !== "") {
+        // PRIORITAS 5
+        valueToFill = defData[defKey];
+        valueSource = `defData[${defKey}]`;
+      } else {
+        // PRIORITAS 6
+        valueToFill = field.default;
+        valueSource = "field.default";
+      }
+
+      // ✅ DEBUG: log sumber value
+      if (valueToFill === undefined || valueToFill === null || valueToFill === "") {
+        console.log(`[Robot] ⏭️ Skip "${field.label}" (semua sumber kosong)`);
         continue;
+      }
 
-      // Cari container pertanyaan
+      console.log(
+        `[Robot] "${field.label}" → "${valueToFill}" (dari ${valueSource})`,
+      );
+
+      // ===== Cari container pertanyaan =====
       const questions = document.querySelectorAll(".sd-question");
       let targetQuestionEl = null;
 
@@ -166,7 +231,10 @@ async function runDynamicAutofillForm(
             .replace(/\s+/g, " ")
             .trim();
 
-          if (normalizedDOMTitle.includes(normalizedSchemaLabel)) {
+          if (
+            normalizedDOMTitle.includes(normalizedSchemaLabel) ||
+            normalizedSchemaLabel.includes(normalizedDOMTitle)
+          ) {
             targetQuestionEl = q;
             break;
           }
@@ -175,7 +243,7 @@ async function runDynamicAutofillForm(
 
       if (!targetQuestionEl) {
         console.warn(
-          `[Robot] Elemen pertanyaan "${field.label}" tidak ditemukan`,
+          `[Robot] ⚠️ Pertanyaan "${field.label}" tidak ditemukan di form`,
         );
         continue;
       }
@@ -192,7 +260,7 @@ async function runDynamicAutofillForm(
           dropdownEl.click();
           await new Promise((r) => setTimeout(r, 200));
 
-          const normalizedSchemaText = valueToFill
+          const normalizedSchemaText = String(valueToFill)
             .replace(/\s+/g, " ")
             .trim()
             .toLowerCase();
@@ -221,7 +289,7 @@ async function runDynamicAutofillForm(
                 );
                 item.click();
                 console.log(
-                  `[Robot] Dropdown "${valueToFill}" untuk "${field.label}"`,
+                  `[Robot] ✅ Dropdown "${valueToFill}" untuk "${field.label}"`,
                 );
                 optionFound = true;
                 break;
@@ -230,7 +298,7 @@ async function runDynamicAutofillForm(
 
             if (!optionFound) {
               console.warn(
-                `[Robot] Opsi "${valueToFill}" tidak ditemukan di dropdown`,
+                `[Robot] ⚠️ Opsi "${valueToFill}" tidak ditemukan di dropdown "${field.label}"`,
               );
               document.body.click();
             }
@@ -241,13 +309,28 @@ async function runDynamicAutofillForm(
       // ===== TEXT / NUMBER =====
       else if (field.type === "text" || field.type === "number") {
         const inputEl = targetQuestionEl.querySelector(
-          "input.sd-input, textarea.sd-input",
+          "input.sd-input, textarea.sd-input, input[type='number'], input[type='text']",
         );
         if (inputEl) {
-          forceInput(inputEl, valueToFill);
-          await new Promise((r) => setTimeout(r, 100));
+          // Pakai native setter supaya SurveyJS deteksi perubahan
+          const proto =
+            inputEl.tagName === "TEXTAREA"
+              ? HTMLTextAreaElement.prototype
+              : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+
+          if (setter) {
+            setter.call(inputEl, String(valueToFill));
+          } else {
+            inputEl.value = valueToFill;
+          }
+
+          ["input", "change", "blur", "keyup"].forEach((e) =>
+            inputEl.dispatchEvent(new Event(e, { bubbles: true })),
+          );
+
           console.log(
-            `[Robot] Isi "${field.label}" = "${valueToFill}"`,
+            `[Robot] ✅ Isi "${field.label}" = "${valueToFill}"`,
           );
           optionFound = true;
         }
@@ -265,10 +348,12 @@ async function runDynamicAutofillForm(
           if (labelTextEl) {
             const normalizedDOMText = labelTextEl.textContent
               .replace(/\s+/g, " ")
-              .trim();
-            const normalizedSchemaText = valueToFill
+              .trim()
+              .toLowerCase();
+            const normalizedSchemaText = String(valueToFill)
               .replace(/\s+/g, " ")
-              .trim();
+              .trim()
+              .toLowerCase();
 
             if (normalizedDOMText === normalizedSchemaText) {
               const radioInput = item.querySelector("input[type='radio']");
@@ -278,7 +363,7 @@ async function runDynamicAutofillForm(
                   new Event("change", { bubbles: true }),
                 );
                 console.log(
-                  `[Robot] Radio "${valueToFill}" untuk "${field.label}"`,
+                  `[Robot] ✅ Radio "${valueToFill}" untuk "${field.label}"`,
                 );
                 optionFound = true;
               }
@@ -290,7 +375,7 @@ async function runDynamicAutofillForm(
 
       if (!optionFound) {
         console.warn(
-          `[Robot] Opsi "${valueToFill}" tidak ditemukan pada "${field.label}"`,
+          `[Robot] ⚠️ Gagal isi "${field.label}" dengan "${valueToFill}"`,
         );
       }
 

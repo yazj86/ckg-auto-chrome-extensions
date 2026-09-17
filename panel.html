@@ -6,15 +6,16 @@
     <link href="lib/bootstrap.min.css" rel="stylesheet" />
     <script src="lib/bootstrap.bundle.min.js"></script>
     <script src="lib/sweetalert2.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/sweetalert-theme.css" />
 
-    <!-- ==================== PANEL THEME (UI REFRESH) ==================== -->
     <style>
-      /* ---------- Design Tokens ---------- */
+      /* ==================== DESIGN TOKENS ==================== */
       :root {
         --brand: #0f7f8c;
         --brand-dark: #0a5a63;
         --brand-soft: #e8f5f7;
+        --brand-line: #c7e0e4;
         --brand-ring: rgba(15, 127, 140, 0.18);
         --ink: #1e293b;
         --ink-soft: #475569;
@@ -30,7 +31,7 @@
         --shadow-lg: 0 18px 45px rgba(15, 35, 60, 0.14);
       }
 
-      /* ---------- Base ---------- */
+      /* ==================== BASE ==================== */
       body {
         font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
           Arial, sans-serif;
@@ -47,7 +48,7 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      /* ---------- Shell / Card ---------- */
+      /* ==================== SHELL / CARD ==================== */
       .app-card {
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
@@ -56,7 +57,7 @@
         border: 1px solid rgba(255, 255, 255, 0.6);
       }
 
-      /* ---------- Header ---------- */
+      /* ==================== HEADER ==================== */
       .app-header {
         position: relative;
         display: flex;
@@ -120,7 +121,7 @@
         letter-spacing: 0.2px;
       }
 
-      /* ---------- Tabs (segmented control) ---------- */
+      /* ==================== TABS ==================== */
       #registrationTabs {
         display: flex;
         gap: 6px;
@@ -134,13 +135,14 @@
       }
       #registrationTabs .nav-link {
         width: 100%;
-        padding: 0.5rem 0.75rem;
+        padding: 0.5rem 0.5rem;
         border: 0;
         border-radius: 9px;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
         font-weight: 600;
         color: var(--muted);
         transition: all 0.18s ease;
+        white-space: nowrap;
       }
       #registrationTabs .nav-link:hover {
         color: var(--brand);
@@ -152,7 +154,7 @@
         box-shadow: 0 1px 3px rgba(16, 40, 70, 0.14);
       }
 
-      /* ---------- Buttons ---------- */
+      /* ==================== BUTTONS ==================== */
       .btn {
         border-radius: var(--radius-sm);
         font-weight: 600;
@@ -194,8 +196,18 @@
         padding: 0.65rem 1rem;
         font-size: 0.9rem;
       }
+      .btn-outline-danger {
+        color: #dc2626;
+        border-color: #fecaca;
+        background: #fff;
+      }
+      .btn-outline-danger:hover {
+        background: #fef2f2;
+        border-color: #dc2626;
+        color: #b91c1c;
+      }
 
-      /* ---------- Field card (tanggal) ---------- */
+      /* ==================== FIELD CARD ==================== */
       .field-card {
         padding: 12px 14px;
         border: 1px solid var(--line);
@@ -229,7 +241,7 @@
         border: 1px solid #fecdca;
       }
 
-      /* ---------- Form controls ---------- */
+      /* ==================== FORM CONTROLS ==================== */
       .form-select,
       .form-control {
         border-radius: var(--radius-sm);
@@ -243,14 +255,13 @@
         box-shadow: 0 0 0 0.2rem var(--brand-ring);
       }
 
-      /* ---------- Divider ---------- */
       .section-divider {
         margin: 14px 0 10px;
         border: 0;
         border-top: 1px dashed var(--line);
       }
 
-      /* ---------- Table ---------- */
+      /* ==================== TABLE ==================== */
       .table-responsive {
         border: 1px solid var(--line);
         border-radius: var(--radius-md);
@@ -303,7 +314,7 @@
         background-color: #eff9fa;
       }
 
-      /* ---------- Settings card ---------- */
+      /* ==================== SETTINGS CARD ==================== */
       .settings-card {
         border: 1px solid var(--line);
         border-radius: var(--radius-md);
@@ -336,7 +347,7 @@
         padding: 12px 14px 14px;
       }
 
-      /* ---------- Switch grid ---------- */
+      /* ==================== SWITCH GRID ==================== */
       .switch-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
@@ -381,7 +392,6 @@
         border-color: var(--brand);
         box-shadow: 0 0 0 0.2rem var(--brand-ring);
       }
-      /* highlight aktif */
       .switch-grid .form-check:has(.form-check-input:checked) {
         border-color: var(--brand);
         background: var(--brand-soft);
@@ -390,7 +400,7 @@
         color: var(--brand-dark);
       }
 
-      /* ---------- Sub group (detail pemeriksaan) ---------- */
+      /* ==================== SUB GROUP ==================== */
       #subPemeriksaanGroup {
         margin-top: 12px;
         padding: 12px;
@@ -410,7 +420,7 @@
         color: var(--brand-dark);
       }
 
-      /* ---------- Accordion (Ringkasan) ---------- */
+      /* ==================== ACCORDION (RINGKASAN) ==================== */
       #accordionSummary {
         border: 1px solid var(--line);
         border-radius: var(--radius-md);
@@ -444,7 +454,7 @@
         border-top: 1px solid var(--line);
       }
 
-      /* ---------- Alert / message ---------- */
+      /* ==================== ALERT / MESSAGE ==================== */
       #parent-text-message {
         border: 1px solid #fde68a;
         border-left: 4px solid #f59e0b;
@@ -455,7 +465,7 @@
         padding: 0.7rem 0.9rem;
       }
 
-      /* ---------- Loading ---------- */
+      /* ==================== LOADING ==================== */
       #loading-spinner {
         padding: 18px 14px;
         border: 1px solid var(--line);
@@ -475,7 +485,7 @@
         margin: 0 2px;
       }
 
-      /* ---------- Utilities ---------- */
+      /* ==================== UTILITIES ==================== */
       @keyframes ckgBlink {
         0%,
         100% {
@@ -494,6 +504,116 @@
         letter-spacing: 0.5px;
         text-transform: uppercase;
         color: var(--muted);
+      }
+
+      /* ==================== INFO NOTE (TEAL) ==================== */
+      .info-note-brand {
+        padding: 0.6rem 0.85rem;
+        border: 1px solid #bae6fd;
+        border-left: 4px solid var(--brand);
+        border-radius: 10px;
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        font-size: 0.78rem;
+        line-height: 1.5;
+      }
+
+      /* ==================== KARTU PERSIAPAN ==================== */
+      .prep-card {
+        padding: 12px 14px;
+        border: 1px solid var(--brand-line);
+        border-radius: 10px;
+        background: linear-gradient(180deg, #f4fbfc 0%, #e8f5f7 100%);
+      }
+      .prep-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed var(--brand-line);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--brand-dark);
+      }
+      .prep-head .prep-icon {
+        color: var(--brand);
+        flex-shrink: 0;
+      }
+      .prep-list {
+        margin: 0;
+        padding-left: 1.15rem;
+        font-size: 0.78rem;
+        color: var(--brand-dark);
+        line-height: 1.7;
+      }
+      .prep-list li {
+        padding-left: 2px;
+      }
+      .prep-list li::marker {
+        color: var(--brand);
+        font-weight: 700;
+      }
+      .prep-list b {
+        color: var(--brand-dark);
+        font-weight: 700;
+      }
+
+      /* ==================== LOG TABLE BY DATE ==================== */
+      #byDateLogTable {
+        font-size: 0.72rem;
+      }
+      #byDateLogTable thead th {
+        background: #10323c !important;
+        color: #e6f4f6 !important;
+      }
+      #byDateLogTable .badge {
+        font-size: 0.65rem;
+        font-weight: 700;
+      }
+      #byDateLogTable .log-row-ok {
+        background: #f0fdf4 !important;
+      }
+      #byDateLogTable .log-row-fail {
+        background: #fef2f2 !important;
+      }
+      #byDateLogTable .log-row-skip {
+        background: #eff6ff !important;
+      }
+      #byDateLogTable .log-row-warn {
+        background: #fffbeb !important;
+      }
+      #byDateLogBody:empty::after {
+        content: "Belum ada log";
+        display: block;
+        text-align: center;
+        color: #94a3b8;
+        padding: 1.5rem;
+        font-size: 0.8rem;
+      }
+
+      /* ==================== AUTO-HIDE SHARED SETTINGS DI TAB BY DATE ==================== */
+      body:has(#panel-by-date.show) #sharedSettingsSection {
+        display: none !important;
+      }
+
+      /* ==================== INFO MODE BY-DATE ==================== */
+      #byDateModeInfo {
+        transition: all 0.2s ease;
+      }
+      #byDateModeInfo.mode-excel {
+        border-color: #86efac;
+        border-left-color: #10b981;
+        background: #f0fdf4;
+        color: #065f46;
+      }
+      #byDateModeInfo.mode-daterange {
+        border-color: #bae6fd;
+        border-left-color: #0ea5e9;
+        background: #f0f9ff;
+        color: #075985;
       }
     </style>
   </head>
@@ -542,10 +662,26 @@
               🏫 Sekolah
             </button>
           </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="tab-by-date"
+              data-bs-toggle="tab"
+              data-bs-target="#panel-by-date"
+              type="button"
+              role="tab"
+              aria-controls="panel-by-date"
+              aria-selected="false"
+            >
+              📅 By Date
+            </button>
+          </li>
         </ul>
 
         <div class="tab-content mt-3" id="registrationTabsContent">
-          <!-- ==================== PANEL INDIVIDU ==================== -->
+          <!-- ============================================================ -->
+          <!-- TAB 1: INDIVIDU                                              -->
+          <!-- ============================================================ -->
           <div
             class="tab-pane fade show active"
             id="panel-individu"
@@ -559,7 +695,6 @@
               📋 Persiapan Data Individu
             </button>
 
-            <!-- Tanggal Pemeriksaan hanya untuk Individu -->
             <div class="field-card mb-3">
               <div class="field-head">
                 <label
@@ -568,9 +703,7 @@
                   title="Tanggal Pemeriksaan"
                   >Tanggal Pemeriksaan</label
                 >
-                <span class="field-badge blink-animation"
-                  >Wajib diisi!</span
-                >
+                <span class="field-badge blink-animation">Wajib diisi!</span>
               </div>
               <select id="tanggal_pemeriksaan_individu" class="form-select">
                 <!-- Opsi 1-31 akan di-generate otomatis via JS -->
@@ -616,14 +749,14 @@
                     <th>Keterangan</th>
                   </tr>
                 </thead>
-                <tbody id="tBodyAktifDataIndividu">
-                  <!-- Data individu akan dimasukkan lewat JS -->
-                </tbody>
+                <tbody id="tBodyAktifDataIndividu"></tbody>
               </table>
             </div>
           </div>
 
-          <!-- ==================== PANEL SEKOLAH ==================== -->
+          <!-- ============================================================ -->
+          <!-- TAB 2: SEKOLAH                                               -->
+          <!-- ============================================================ -->
           <div
             class="tab-pane fade"
             id="panel-sekolah"
@@ -637,7 +770,6 @@
               📋 Persiapan Data Sekolah
             </button>
 
-            <!-- Mode sekolah tidak butuh tanggal pemeriksaan -->
             <div class="alert alert-info py-2 mb-3" style="font-size: 0.82rem">
               ℹ️ Mode Sekolah tidak memerlukan pengisian tanggal pemeriksaan.
             </div>
@@ -683,151 +815,384 @@
                     <th>Keterangan</th>
                   </tr>
                 </thead>
-                <tbody id="tBodyAktifDataSekolah">
-                  <!-- Data sekolah akan dimasukkan lewat JS -->
-                </tbody>
+                <tbody id="tBodyAktifDataSekolah"></tbody>
               </table>
             </div>
           </div>
-        </div>
 
-        <!-- ==================== RINGKASAN (SHARED) ==================== -->
-        <div class="accordion accordion-flush my-3" id="accordionSummary">
-          <div class="accordion-item">
-            <h2 class="accordion-header" id="headingSummary">
-              <button
-                class="accordion-button py-2 px-3 collapsed"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#collapseSummary"
-                aria-expanded="false"
-                aria-controls="collapseSummary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  fill="currentColor"
-                  viewBox="0 0 16 16"
-                  class="me-2 flex-shrink-0"
-                >
-                  <path
-                    d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"
-                  />
-                </svg>
-                Ringkasan
-              </button>
-            </h2>
-
-            <div
-              id="collapseSummary"
-              class="accordion-collapse collapse"
-              aria-labelledby="headingSummary"
-              data-bs-parent="#accordionSummary"
+          <!-- ============================================================ -->
+          <!-- TAB 3: BY DATE                                               -->
+          <!-- ============================================================ -->
+          <div
+            class="tab-pane fade"
+            id="panel-by-date"
+            role="tabpanel"
+            aria-labelledby="tab-by-date"
+          >
+            <!-- ✅ TOMBOL PERSIAPAN DATA BY DATE -->
+            <button
+              id="openDataPreparationByDate"
+              class="btn btn-primary btn-action w-100 mb-3"
             >
-              <div class="accordion-body p-2">
+              📋 Persiapan Data by Date
+            </button>
+
+            <!-- Card: Pengaturan by-date -->
+            <div class="settings-card mb-3">
+              <div class="settings-head">
+                <span class="dot"></span>
+                <span class="settings-title"
+                  >📅 Pengaturan Pemeriksaan by Date</span
+                >
+              </div>
+              <div class="settings-body">
+                <div class="info-note-brand mb-3">
+                  ℹ️ Proses semua peserta di halaman pelayanan yang sudah
+                  difilter tanggalnya. Robot akan loop otomatis.
+                </div>
+
+                <!-- Kartu Persiapan -->
+                <div class="prep-card mb-3">
+                  <div class="prep-head">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      fill="currentColor"
+                      viewBox="0 0 16 16"
+                      class="prep-icon"
+                    >
+                      <path
+                        d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"
+                      />
+                      <path
+                        d="m10.97 4.97-.02.022-3.473 4.425-2.093-2.094a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05"
+                      />
+                    </svg>
+                    Persiapan
+                  </div>
+                  <ul class="prep-list">
+                    <li>
+                      Buka <b>ckg-pelayanan</b> di tab browser
+                    </li>
+                    <li>
+                      Set <b>filter tanggal</b> di halaman tersebut
+                    </li>
+                    <li>
+                      Pastikan tab aktif = <b>"Belum Pemeriksaan"</b>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Source Tab -->
+                <div class="mb-3">
+                  <label class="section-label mb-2 d-block">
+                    Pemeriksaan
+                  </label>
+                  <div class="switch-grid">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input"
+                        type="radio"
+                        name="byDateSource"
+                        id="srcBelum"
+                        value="Belum Pemeriksaan"
+                        checked
+                      />
+                      <label class="form-check-label" for="srcBelum">
+                        📋 Belum Pemeriksaan
+                      </label>
+                    </div>
+                    <div class="form-check">
+                      <input
+                        class="form-check-input"
+                        type="radio"
+                        name="byDateSource"
+                        id="srcSedang"
+                        value="Sedang Pemeriksaan"
+                      />
+                      <label class="form-check-label" for="srcSedang">
+                        🔄 Sedang Pemeriksaan
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Mode Pemeriksaan -->
+                <div class="mb-3">
+                  <label class="section-label mb-2 d-block">
+                    Mode Pemeriksaan
+                  </label>
+                  <div class="switch-grid">
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="byDateChkMulai"
+                        checked
+                      />
+                      <label class="form-check-label" for="byDateChkMulai">
+                        🩺 Mulai Pemeriksaan
+                      </label>
+                    </div>
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="byDateChkMandiri"
+                        checked
+                      />
+                      <label class="form-check-label" for="byDateChkMandiri">
+                        📝 Isi Form Mandiri
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Catatan Tanggal -->
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                  <div class="flex-grow-1" style="min-width: 140px">
+                    <label
+                      for="inputTglDari"
+                      class="section-label mb-1 d-block"
+                      >Dari Tgl:</label
+                    >
+                    <input
+                      type="date"
+                      id="inputTglDari"
+                      class="form-control form-control-sm"
+                    />
+                  </div>
+                  <div class="flex-grow-1" style="min-width: 140px">
+                    <label
+                      for="inputTglSampai"
+                      class="section-label mb-1 d-block"
+                      >Sampai Tgl:</label
+                    >
+                    <input
+                      type="date"
+                      id="inputTglSampai"
+                      class="form-control form-control-sm"
+                    />
+                  </div>
+                </div>
+
+                <!-- ✅ INFO MODE AKTIF (baru) -->
+                <div id="byDateModeInfo" class="info-note-brand mb-2">
+                  Memuat info mode...
+                </div>
+
                 <button
-                  id="btnRefreshSummary"
-                  class="btn btn-outline-primary btn-sm w-100 mt-1 mb-2"
+                  id="runByDateBtn"
+                  class="btn btn-primary btn-action w-100 mb-2"
                 >
-                  🔄 Refresh Ringkasan
+                  📅 Jalankan Pemeriksaan by Date
                 </button>
-                <div id="summary"></div>
+                <button
+                  id="stopByDateBtn"
+                  class="btn btn-outline-danger w-100 btn-sm d-none"
+                >
+                  ⏹ Stop
+                </button>
+              </div>
+            </div>
+
+            <!-- Card: Log Proses -->
+            <div class="settings-card">
+              <div class="settings-head">
+                <span class="dot"></span>
+                <span class="settings-title">📊 Log Proses</span>
+                <span
+                  id="byDateLogCounter"
+                  class="badge bg-secondary ms-auto"
+                  style="font-size: 0.65rem"
+                  >0</span
+                >
+              </div>
+              <div class="settings-body p-0">
+                <div
+                  class="table-responsive"
+                  style="
+                    max-height: 380px;
+                    overflow-y: auto;
+                    border: 0;
+                    border-radius: 0;
+                  "
+                >
+                  <table
+                    id="byDateLogTable"
+                    class="table table-sm table-bordered text-nowrap mb-0"
+                  >
+                    <thead>
+                      <tr>
+                        <th style="width: 30px">#</th>
+                        <th>Nama</th>
+                        <th>Tgl Lahir</th>
+                        <th>Tiket</th>
+                        <th class="text-center" style="width: 80px">Status</th>
+                        <th>Keterangan</th>
+                        <th class="text-center" style="width: 90px">Aksi</th>
+                        <th style="width: 65px">Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody id="byDateLogBody"></tbody>
+                  </table>
+                </div>
+                <div class="p-2 border-top d-flex gap-2">
+                  <button
+                    id="downloadByDateLogBtn"
+                    class="btn btn-outline-primary btn-sm flex-grow-1"
+                  >
+                    📥 Download Log
+                  </button>
+                  <button
+                    id="clearByDateLogBtn"
+                    class="btn btn-outline-danger btn-sm flex-grow-1"
+                  >
+                    🗑 Bersihkan Log
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- ==================== RUN SETTINGS (SHARED) ==================== -->
-        <div class="settings-card mb-3">
-          <div class="settings-head">
-            <span class="dot"></span>
-            <span class="settings-title">Pengaturan Proses</span>
-          </div>
-
-          <div class="settings-body">
-            <!-- Grup Utama -->
-            <div class="switch-grid">
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input main-chk"
-                  type="checkbox"
-                  id="chkPendaftaran"
-                  data-field="pendaftaran"
-                />
-                <label class="form-check-label" for="chkPendaftaran"
-                  >Pendaftaran</label
+        <!-- ============================================================ -->
+        <!-- SHARED SETTINGS: Ringkasan + Pengaturan Proses + Tombol       -->
+        <!-- ✅ Otomatis disembunyikan saat tab By Date aktif              -->
+        <!-- ============================================================ -->
+        <div id="sharedSettingsSection">
+          <!-- ==================== RINGKASAN ==================== -->
+          <div class="accordion accordion-flush my-3" id="accordionSummary">
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="headingSummary">
+                <button
+                  class="accordion-button py-2 px-3 collapsed"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseSummary"
+                  aria-expanded="false"
+                  aria-controls="collapseSummary"
                 >
-              </div>
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input main-chk"
-                  type="checkbox"
-                  id="chkKehadiran"
-                  data-field="kehadiran"
-                />
-                <label class="form-check-label" for="chkKehadiran"
-                  >Kehadiran</label
-                >
-              </div>
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input parent-chk"
-                  type="checkbox"
-                  id="chkPemeriksaan"
-                />
-                <label class="form-check-label" for="chkPemeriksaan"
-                  >Pemeriksaan</label
-                >
-              </div>
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input main-chk"
-                  type="checkbox"
-                  id="chkRapor"
-                  data-field="rapor"
-                />
-                <label class="form-check-label" for="chkRapor">Rapor</label>
-              </div>
-            </div>
-
-            <!-- Sub-Pemeriksaan -->
-            <div id="subPemeriksaanGroup">
-              <div class="sub-title">Detail Pemeriksaan</div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                    class="me-2 flex-shrink-0"
+                  >
+                    <path
+                      d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"
+                    />
+                  </svg>
+                  Ringkasan
+                </button>
+              </h2>
               <div
-                id="checkboxPemeriksaanContainer"
-                class="switch-grid"
+                id="collapseSummary"
+                class="accordion-collapse collapse"
+                aria-labelledby="headingSummary"
+                data-bs-parent="#accordionSummary"
               >
-                <div class="form-check form-switch">
-                  <input
-                    class="form-check-input sub-chk"
-                    type="checkbox"
-                    id="chkPemeriksaanMulai"
-                    data-subfield="mulai"
-                  />
-                  <label class="form-check-label" for="chkPemeriksaanMulai"
-                    >Mulai</label
+                <div class="accordion-body p-2">
+                  <button
+                    id="btnRefreshSummary"
+                    class="btn btn-outline-primary btn-sm w-100 mt-1 mb-2"
                   >
-                </div>
-                <div class="form-check form-switch">
-                  <input
-                    class="form-check-input sub-chk"
-                    type="checkbox"
-                    id="chkPemeriksaanMandiri"
-                    data-subfield="mandiri"
-                  />
-                  <label class="form-check-label" for="chkPemeriksaanMandiri"
-                    >Mandiri</label
-                  >
+                    🔄 Refresh Ringkasan
+                  </button>
+                  <div id="summary"></div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <button id="runProcessBtn" class="btn btn-success w-100 btn-action">
-          ▶ Jalankan Proses Terpilih
-        </button>
+          <!-- ==================== PENGATURAN PROSES ==================== -->
+          <div class="settings-card mb-3">
+            <div class="settings-head">
+              <span class="dot"></span>
+              <span class="settings-title">Pengaturan Proses</span>
+            </div>
+            <div class="settings-body">
+              <div class="switch-grid">
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input main-chk"
+                    type="checkbox"
+                    id="chkPendaftaran"
+                    data-field="pendaftaran"
+                  />
+                  <label class="form-check-label" for="chkPendaftaran"
+                    >Pendaftaran</label
+                  >
+                </div>
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input main-chk"
+                    type="checkbox"
+                    id="chkKehadiran"
+                    data-field="kehadiran"
+                  />
+                  <label class="form-check-label" for="chkKehadiran"
+                    >Kehadiran</label
+                  >
+                </div>
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input parent-chk"
+                    type="checkbox"
+                    id="chkPemeriksaan"
+                  />
+                  <label class="form-check-label" for="chkPemeriksaan"
+                    >Pemeriksaan</label
+                  >
+                </div>
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input main-chk"
+                    type="checkbox"
+                    id="chkRapor"
+                    data-field="rapor"
+                  />
+                  <label class="form-check-label" for="chkRapor">Rapor</label>
+                </div>
+              </div>
+
+              <div id="subPemeriksaanGroup">
+                <div class="sub-title">Detail Pemeriksaan</div>
+                <div id="checkboxPemeriksaanContainer" class="switch-grid">
+                  <div class="form-check form-switch">
+                    <input
+                      class="form-check-input sub-chk"
+                      type="checkbox"
+                      id="chkPemeriksaanMulai"
+                      data-subfield="mulai"
+                    />
+                    <label class="form-check-label" for="chkPemeriksaanMulai"
+                      >Mulai</label
+                    >
+                  </div>
+                  <div class="form-check form-switch">
+                    <input
+                      class="form-check-input sub-chk"
+                      type="checkbox"
+                      id="chkPemeriksaanMandiri"
+                      data-subfield="mandiri"
+                    />
+                    <label class="form-check-label" for="chkPemeriksaanMandiri"
+                      >Mandiri</label
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="runProcessBtn" class="btn btn-success w-100 btn-action">
+            ▶ Jalankan Proses Terpilih
+          </button>
+        </div>
 
         <!-- ==================== MESSAGES & LOADING ==================== -->
         <div
@@ -859,10 +1224,10 @@
         </div>
 
         <div
-  id="loading-spinner"
-  class="text-center mx-auto w-100 mt-3"
-  style="display: none"
->
+          id="loading-spinner"
+          class="text-center mx-auto w-100 mt-3"
+          style="display: none"
+        >
           <p class="text-center mb-2">
             ⚠️ Jangan tutup atau close window ini, proses sedang berjalan!
           </p>
@@ -903,6 +1268,7 @@
     <script src="scripts/robot-kehadiran-sekolah.js"></script>
     <script src="scripts/robot-pemeriksaan.js"></script>
     <script src="scripts/robot-pemeriksaan-mandiri.js"></script>
+    <script src="scripts/robot-pemeriksaan-by-date.js"></script>
     <script src="scripts/panel.js"></script>
   </body>
 </html>

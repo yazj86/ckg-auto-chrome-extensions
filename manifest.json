@@ -39,5 +39,17 @@
       ],
       "js": ["scripts/helper.js"]
     }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "data-preparation-individu.html",
+        "data-preparation-sekolah.html",
+        "data-preparation-by-date.html",
+        "panel.html"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
