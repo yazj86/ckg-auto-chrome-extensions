@@ -25,6 +25,8 @@ async function runPendaftaranIndividu(iData, defData) {
     iData.keterangan = result.message;
   } else {
     if (result.status === "ERROR" || result.status === "TIMEOUT") {
+      iData.pendaftaran = "GAGAL";
+      iData.status_input = result.status;
       iData.keterangan = result.message;
     } else {
       iData.pendaftaran = "GAGAL";
@@ -43,7 +45,7 @@ async function runPendaftaranAutofillIndividu({
   tgl_pemeriksaan,
 }) {
   let targetTabId = null;
-  const targetUrl = url; // misal MAIN_URL.PENDAFTARAN.INDIVIDUAL
+  const targetUrl = url;
   const targetOrigin = new URL(targetUrl).origin;
 
   // Cari tab yang sudah terbuka dengan domain target
@@ -52,7 +54,6 @@ async function runPendaftaranAutofillIndividu({
 
   if (existingTab) {
     targetTabId = existingTab.id;
-    // Jika tab berada di halaman lain (profil, dsb), arahkan ke URL pendaftaran
     if (!existingTab.url.includes(targetUrl)) {
       await chrome.tabs.update(targetTabId, { url: targetUrl, active: true });
     } else {
@@ -165,7 +166,7 @@ async function runPendaftaranAutofillIndividu({
                 }
 
                 logStatus("Data diterima, mulai proses pendaftaran...");
-                const state = { nikFound: true, earlyExit: null };
+                const state = { earlyExit: null };
 
                 const steps = [
                   {
@@ -317,6 +318,13 @@ async function runPendaftaranAutofillIndividu({
                       if (tglEl) clickElement(tglEl);
                     },
                   },
+
+                  // ============================================================
+                  // ✅ FIXED: Timeout bertingkat (adaptif server cepat/lemot)
+                  // Percobaan 1: 5s → server normal langsung sukses
+                  // Percobaan 2: 15s → server agak lambat
+                  // Percobaan 3: 30s → server lemot
+                  // ============================================================
                   {
                     name: "Click Next & Handle Multi-Stage Validation",
                     shouldRun: () => !state.earlyExit,
@@ -326,91 +334,164 @@ async function runPendaftaranAutofillIndividu({
                         X_PATH.BTN_SELANJUTNYA ||
                           "//button[contains(., 'Selanjutnya')]",
                         null,
-                        20000,
+                        1000,
                       );
                       clickElement(btnSelanjutnya);
+
+                      // ✅ Tunggu shimmer hilang
+                      logStatus("   Menunggu server selesai memproses...");
+                      await waitUntilLoadingDone(1000);
+                      await sleep(500);
+
                       logStatus("Menunggu respons validasi sistem...");
 
-                      const baseValidationChecks = [
-                        waitForElementAsync(
-                          X_PATH.POPUP_INDIVIDU_SUDAH_MENERIMA_LAYANAN,
-                        ).then(() => "SUDAH_LAYANAN"),
-                        waitForElementAsync(
-                          X_PATH.POPUP_DATA_PESERTA_WALI_TIDAK_VALID,
-                        ).then(() => "INVALID_WALI"),
-                        waitForElementAsync(
-                          X_PATH.POPUP_DATA_PESERTA_TIDAK_VALID,
-                        ).then(() => "INVALID_PESERTA"),
-                        waitForElementAsync(
-                          X_PATH.BTN_LANJUTKAN_DATA_VALID,
-                        ).then(() => "SUCCESS_ROUTE"),
-                      ];
+                      // ✅ TIMEOUT BERTINGKAT
+                      const RETRY_TIMEOUTS = [1000, 5000, 10000];
+                      const MAX_RETRY = RETRY_TIMEOUTS.length;
 
-                      try {
-                        let status = await Promise.race([
-                          waitForElementAsync(
-                            X_PATH.BTN_LANJUT_KUOTA_HABIS,
-                          ).then(() => "QUOTA_HABIS"),
-                          ...baseValidationChecks,
-                        ]);
+                      for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+                        if (state.earlyExit) return;
 
-                        if (status === "QUOTA_HABIS") {
-                          logStatus(
-                            "⚠️ Kuota habis terdeteksi, melewati pembatasan...",
-                          );
-                          const btnKuota = await waitForElementAsync(
-                            X_PATH.BTN_LANJUT_KUOTA_HABIS,
-                          );
-                          clickElement(btnKuota);
-                          logStatus(
-                            "Memeriksa validasi data setelah bypass kuota...",
-                          );
-                          status = await Promise.race(baseValidationChecks);
-                        }
-
-                        if (status === "SUDAH_LAYANAN") {
-                          logStatus(
-                            "❌ Gagal: Individu sudah menerima layanan.",
-                          );
-                          state.earlyExit = {
-                            success: false,
-                            status: "LAINNYA",
-                            message: "Individu sudah menerima layanan",
-                          };
-                        } else if (status === "INVALID_WALI") {
-                          logStatus(
-                            "❌ Gagal: Data peserta atau wali tidak valid.",
-                          );
-                          state.earlyExit = {
-                            success: false,
-                            status: "LAINNYA",
-                            message: "Data peserta atau wali tidak valid",
-                          };
-                        } else if (status === "INVALID_PESERTA") {
-                          logStatus("❌ Gagal: Data peserta tidak valid.");
-                          state.earlyExit = {
-                            success: false,
-                            status: "LAINNYA",
-                            message: "Data peserta tidak valid",
-                          };
-                        } else if (status === "SUCCESS_ROUTE") {
-                          logStatus(
-                            "✅ Data valid! Melanjutkan pendaftaran...",
-                          );
-                        }
-                      } catch (err) {
+                        const timeout = RETRY_TIMEOUTS[attempt - 1];
                         logStatus(
-                          "❌ Error: Validasi sistem tidak merespons (Timeout).",
+                          `   Percobaan ${attempt}/${MAX_RETRY} (timeout ${
+                            timeout / 1000
+                          }s)...`,
                         );
-                        state.earlyExit = {
-                          success: false,
-                          status: "TIMEOUT",
-                          message:
-                            "System timeout waiting for validation response",
-                        };
+
+                        // Setiap retry, tunggu loading dulu
+                        await waitUntilLoadingDone(timeout);
+
+                        const baseValidationChecks = [
+                          waitForElementAsync(
+                            X_PATH.POPUP_INDIVIDU_SUDAH_MENERIMA_LAYANAN,
+                            null,
+                            timeout,
+                          ).then(() => "SUDAH_LAYANAN"),
+                          waitForElementAsync(
+                            X_PATH.POPUP_DATA_PESERTA_WALI_TIDAK_VALID,
+                            null,
+                            timeout,
+                          ).then(() => "INVALID_WALI"),
+                          waitForElementAsync(
+                            X_PATH.POPUP_DATA_PESERTA_TIDAK_VALID,
+                            null,
+                            timeout,
+                          ).then(() => "INVALID_PESERTA"),
+                          waitForElementAsync(
+                            X_PATH.BTN_LANJUTKAN_DATA_VALID,
+                            null,
+                            timeout,
+                          ).then(() => "SUCCESS_ROUTE"),
+                        ];
+
+                        try {
+                          let status = await Promise.race([
+                            waitForElementAsync(
+                              X_PATH.BTN_LANJUT_KUOTA_HABIS,
+                              null,
+                              timeout,
+                            ).then(() => "QUOTA_HABIS"),
+                            ...baseValidationChecks,
+                          ]);
+
+                          if (status === "QUOTA_HABIS") {
+                            logStatus(
+                              "⚠️ Kuota habis terdeteksi, melewati pembatasan...",
+                            );
+                            const btnKuota = await waitForElementAsync(
+                              X_PATH.BTN_LANJUT_KUOTA_HABIS,
+                            );
+                            clickElement(btnKuota);
+                            logStatus(
+                              "Memeriksa validasi data setelah bypass kuota...",
+                            );
+                            status = await Promise.race(baseValidationChecks);
+                          }
+
+                          if (status === "SUDAH_LAYANAN") {
+                            logStatus(
+                              "❌ Gagal: Individu sudah menerima layanan.",
+                            );
+                            state.earlyExit = {
+                              success: false,
+                              status: "LAINNYA",
+                              message: "Individu sudah menerima layanan",
+                            };
+                            return;
+                          } else if (status === "INVALID_WALI") {
+                            logStatus(
+                              "❌ Gagal: Data peserta atau wali tidak valid.",
+                            );
+                            state.earlyExit = {
+                              success: false,
+                              status: "LAINNYA",
+                              message: "Data peserta atau wali tidak valid",
+                            };
+                            return;
+                          } else if (status === "INVALID_PESERTA") {
+                            logStatus("❌ Gagal: Data peserta tidak valid.");
+                            state.earlyExit = {
+                              success: false,
+                              status: "LAINNYA",
+                              message: "Data peserta tidak valid",
+                            };
+                            return;
+                          } else if (status === "SUCCESS_ROUTE") {
+                            logStatus(
+                              "✅ Data valid! Melanjutkan pendaftaran...",
+                            );
+                            return; // ✅ keluar dari retry loop, lanjut step berikutnya
+                          }
+                        } catch (err) {
+                          // Semua check timeout → retry
+                          logStatus(
+                            `   ⏱️ Timeout percobaan ${attempt}/${MAX_RETRY} (${
+                              timeout / 1000
+                            }s)`,
+                          );
+
+                          if (attempt < MAX_RETRY) {
+                            logStatus(
+                              "   🔄 Tunggu 2 detik, klik 'Selanjutnya' ulang...",
+                            );
+                            await sleep(2000);
+
+                            // Coba klik "Selanjutnya" lagi (trigger ulang server)
+                            try {
+                              const btnRetry = await waitForElementAsync(
+                                X_PATH.BTN_SELANJUTNYA ||
+                                  "//button[contains(., 'Selanjutnya')]",
+                                null,
+                                3000,
+                              );
+                              if (btnRetry) {
+                                clickElement(btnRetry);
+                                logStatus("   → Klik 'Selanjutnya' ulang");
+                              }
+                            } catch (e) {
+                              logStatus(
+                                "   → Tombol tidak muncul, lanjut tunggu",
+                              );
+                            }
+                          } else {
+                            // Habis retry
+                            logStatus(
+                              "❌ Gagal: Server tidak responsif setelah semua percobaan",
+                            );
+                            state.earlyExit = {
+                              success: false,
+                              status: "TIMEOUT",
+                              message:
+                                "Server slow - timeout setelah 3 percobaan",
+                            };
+                            return;
+                          }
+                        }
                       }
                     },
                   },
+
                   {
                     name: "Continue Registration Submission",
                     shouldRun: () => !state.earlyExit,
@@ -445,24 +526,18 @@ async function runPendaftaranAutofillIndividu({
                             `//div[text()='${inData.status_perkawinan || defData.status_perkawinan}']/ancestor::div[contains(@class,'cursor-pointer')]`,
                           );
                         clickElement(statusPernikahanOption);
-                        await sleep(500);
                       } catch (err) {
                         console.warn("Ignore existing status pernikahan");
                       }
 
-                      const statusDisabilitasValue = String(
-  inData.status_disabilitas || defData.status_disabilitas || "TIDAK",
-).toUpperCase();
-
-const statusDisabilitasLabel =
-  statusDisabilitasValue === "YA"
-    ? "Memiliki disabilitas"
-    : "Tidak memiliki disabilitas";
-
-const statusDisabilitasOption = await waitForElementAsync(
-  `//div[text()='${statusDisabilitasLabel}']/ancestor::div[contains(@class,'cursor-pointer')]`,
-);
-clickElement(statusDisabilitasOption);
+                      const statusDisablitas = await waitForElementAsync(
+                        X_PATH.INPUT_STATUS_DISABILITAS,
+                      );
+                      clickElement(statusDisablitas);
+                      const statusDisabilitasOption = await waitForElementAsync(
+                        `//div[text()='${(inData.status_disabilitas || defData.status_disabilitas) == "YA" ? "Memiliki disabilitas" : "Tidak memiliki disabilitas"}']/ancestor::div[contains(@class,'cursor-pointer')]`,
+                      );
+                      clickElement(statusDisabilitasOption);
 
                       try {
                         async function selectPekerjaan() {
@@ -558,7 +633,7 @@ clickElement(statusDisabilitasOption);
                       }
 
                       await clickFinalSelanjutnya();
-                      setTimeout(clickFinalSelanjutnya, 1000);
+                      setTimeout(clickFinalSelanjutnya, 2000);
                     },
                   },
                   {
@@ -604,24 +679,14 @@ clickElement(statusDisabilitasOption);
             chrome.runtime.onMessage.removeListener(panelMessageListener);
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));
-              return;
+            } else {
+              resolve(results[0].result);
             }
-            if (results && results[0] && results[0].error) {
-              reject(
-                new Error(results[0].error.message || String(results[0].error)),
-              );
-              return;
-            }
-            if (!results || !results[0] || results[0].result === undefined) {
-              reject(new Error("Hasil eksekusi skrip tidak valid"));
-              return;
-            }
-            resolve(results[0].result);
           },
         );
       }
     }
-
     chrome.tabs.onUpdated.addListener(listener);
+    chrome.runtime.onMessage.addListener(panelMessageListener);
   });
 }
