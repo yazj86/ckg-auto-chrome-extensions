@@ -66,39 +66,87 @@ function normalizeHeaderString(str) {
 
 function cleanNumberOnly(val) {
   if (val === null || val === undefined) return null;
-  let str = val.toString().replace(/,/g, ".");
-  let cleaned = str.replace(/[^0-9.]/g, "");
+  let str = val.toString().replace(/,/g, "."); // antisipasi koma desimal
+  let cleaned = str.replace(/[^0-9.]/g, ""); // saring hanya angka dan titik desimal
   return cleaned ? Number(cleaned) : null;
 }
 
+/**
+ * Konversi berbagai format tanggal ke DD-MM-YYYY.
+ * Handles:
+ *   - Excel serial number (44927)
+ *   - JavaScript Date object (dari SheetJS)
+ *   - String "DD-MM-YYYY" / "DD/MM/YYYY"
+ *   - String "YYYY-MM-DD" / "YYYY/MM/DD"
+ *   - String natural "15 Jan 1990" / "Jan 15, 1990"
+ * @returns {string|null} DD-MM-YYYY atau null kalau gagal
+ */
 function toDDMMYYYY(dateStr) {
-  if (!dateStr) return null;
+  // Guard: null / undefined / empty
+  if (dateStr === null || dateStr === undefined || dateStr === "") return null;
+
+  // 1. Excel serial number (contoh: 44927)
   if (!isNaN(dateStr) && Number(dateStr) > 2500) {
     const serial = Number(dateStr);
     const excelEpoch = Date.UTC(1899, 11, 30);
     const date = new Date(excelEpoch + serial * 86400000);
+    if (isNaN(date.getTime())) return null;
     const day = String(date.getUTCDate()).padStart(2, "0");
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     const year = date.getUTCFullYear();
     return `${day}-${month}-${year}`;
   }
-  let parts = dateStr.toString().split(/[-/]/);
-  if (!parts || parts.length < 3) return dateStr;
-  let day, month, year;
-  if (parts[0].length === 4) {
-    year = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    day = parseInt(parts[2], 10);
-  } else {
-    day = parseInt(parts[0], 10);
-    month = parseInt(parts[1], 10);
-    year = parseInt(parts[2], 10);
+
+  // 2. JavaScript Date object (dari SheetJS cellDates:true)
+  if (dateStr instanceof Date) {
+    if (isNaN(dateStr.getTime())) return null;
+    const day = String(dateStr.getDate()).padStart(2, "0");
+    const month = String(dateStr.getMonth() + 1).padStart(2, "0");
+    const year = dateStr.getFullYear();
+    return `${day}-${month}-${year}`;
   }
-  return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+
+  // 3. String parsing
+  const str = dateStr.toString().trim();
+  let day, month, year, match;
+
+  // 3a. Format DD-MM-YYYY atau DD/MM/YYYY
+  match = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(str);
+  if (match) {
+    day = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    year = parseInt(match[3], 10);
+    return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+  }
+
+  // 3b. Format YYYY-MM-DD atau YYYY/MM/DD
+  match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(str);
+  if (match) {
+    year = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    day = parseInt(match[3], 10);
+    return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+  }
+
+  // 3c. Fallback: coba Date.parse() — handle "Jan 15, 1990", "15 Jan 1990", dll.
+  const fallbackDate = new Date(str);
+  if (!isNaN(fallbackDate.getTime())) {
+    const d = String(fallbackDate.getDate()).padStart(2, "0");
+    const m = String(fallbackDate.getMonth() + 1).padStart(2, "0");
+    const y = fallbackDate.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+
+  // 4. Benar-benar gagal → return null
+  console.warn("[CKG] Gagal parse tanggal:", dateStr);
+  return null;
 }
 
-// ✅ FIXED: hanya 1 definisi parseDDMMYYYY (yang pertama dihapus karena
-// definisi kedua di kode asli akan menimpanya — tidak ada validasi kalender)
+/**
+ * Parse string DD-MM-YYYY ke JavaScript Date.
+ * Selalu return Date valid atau Invalid Date (bukan throw).
+ * @returns {Date}
+ */
 function parseDDMMYYYY(dateStr) {
   if (!dateStr || typeof dateStr !== "string") return new Date(NaN);
 
@@ -123,6 +171,10 @@ function parseDDMMYYYY(dateStr) {
   return date;
 }
 
+/**
+ * Parse DD-MM-YYYY ke object { day, month, year, date }.
+ * @returns {object|null}
+ */
 function parseDateString(dateStr) {
   const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(dateStr);
   if (!match) {
@@ -140,7 +192,31 @@ function parseDateString(dateStr) {
   };
 }
 
-// ✅ FIXED: support parameter defPhone (fallback)
+/**
+ * Konversi DD-MM-YYYY → DD MMM YYYY
+ * Contoh: "04-08-1996" → "4 Agt 1996"
+ *
+ * Berguna untuk mencocokkan tanggal dengan tampilan UI yang formatnya
+ * "hari bulan tahun" (bulan 3 huruf Indonesia, hari tanpa leading zero).
+ *
+ * @param {string} tglExcel - Tanggal format DD-MM-YYYY
+ * @returns {string} Tanggal format "DD MMM YYYY"
+ */
+function convertTgl(tglExcel) {
+  if (!tglExcel) return "";
+  const parts = String(tglExcel).split("-");
+  if (parts.length !== 3) return String(tglExcel);
+
+  const [dd, mm, yyyy] = parts;
+  const bulanIndo = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agt", "Sep", "Okt", "Nov", "Des",
+  ];
+  const bulan = bulanIndo[parseInt(mm, 10) - 1] || mm;
+  // Format: hari tanpa leading zero, spasi, bulan, spasi, tahun
+  return `${parseInt(dd, 10)} ${bulan} ${yyyy}`;
+}
+
 function cleanPhoneNumber(phone, defPhone = "") {
   if (!phone) return defPhone;
   let cleaned = phone.toString().replace(/\D/g, "");
@@ -165,7 +241,6 @@ function showPanelMessage(message) {
   const parent = document.getElementById("parent-text-message");
   const textDiv = document.getElementById("text-message");
   if (!parent || !textDiv) return;
-
   if (message && message.trim() !== "") {
     textDiv.textContent = message;
     parent.classList.remove("d-none");
@@ -223,47 +298,62 @@ function waitForElement(xpath, callback, parentEl, maxTries = 10) {
       setTimeout(tryFind, delay);
     } else {
       console.warn("Element not found after", maxTries, "attempts", xpath);
+      callback(null); // ← panggil callback dengan null agar bisa reject
     }
   }
   tryFind();
 }
 
-// ✅ FIXED: pakai event sequence lengkap untuk Vue/React
-function clickElement(el) {
-  if (!el) return;
-
-  const rect = el.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-
-  const eventInit = {
-    bubbles: true,
-    cancelable: true,
-    view: window,
-    composed: true,
-    clientX: cx,
-    clientY: cy,
-    screenX: cx,
-    screenY: cy,
-    button: 0,
-    buttons: 1,
-    detail: 1,
-  };
-
-  el.dispatchEvent(new PointerEvent("pointerdown", eventInit));
-  el.dispatchEvent(new MouseEvent("mousedown", eventInit));
-  el.dispatchEvent(new PointerEvent("pointerup", eventInit));
-  el.dispatchEvent(new MouseEvent("mouseup", eventInit));
-  el.dispatchEvent(new MouseEvent("click", eventInit));
-}
-
-// ✅ TAMBAH: forceClick untuk dropdown Vue yang butuh event lengkap
+/**
+ * Force click ke elemen.
+ * ⚠️ TIDAK pakai scrollIntoView (bisa tutup dropdown)
+ * ⚠️ TIDAK pakai native el.click() (bisa double-click)
+ *
+ * Untuk dropdown option, pakai clickElement() saja.
+ * Untuk tombol/checkbox yang butuh event lengkap, pakai forceClick().
+ */
 function forceClick(el) {
   if (!el) return;
-  clickElement(el);
+
+  el.dispatchEvent(
+    new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }),
+  );
+  el.dispatchEvent(
+    new MouseEvent("mouseup", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }),
+  );
+  el.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }),
+  );
 }
 
-// ✅ FIXED: pakai native setter (Vue/React-friendly)
+function clickElement(el) {
+  if (el) {
+    el.dispatchEvent(
+      new MouseEvent("click", {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }
+}
+
+/**
+ * Isi nilai input dengan native setter (Vue/React-friendly).
+ * Fallback ke el.value kalau native setter tidak tersedia.
+ */
 function inputElementValue(el, val) {
   if (!el) return;
 
@@ -285,7 +375,6 @@ function inputElementValue(el, val) {
 }
 
 const forceInput = (el, val) => {
-  if (!el) return;
   const setter = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value",
@@ -343,15 +432,17 @@ async function sleepUntilLoaded(ms = 500, text = "Memuat data", maxRetry = 20) {
   for (let i = 0; i < maxRetry; i++) {
     await new Promise((r) => setTimeout(r, ms));
     if (!document.body.textContent.toLowerCase().includes(text.toLowerCase())) {
-      await new Promise((r) => setTimeout(r, ms));
-      if (!document.body.textContent.toLowerCase().includes(text.toLowerCase()))
-        return true;
+      return true;
     }
   }
-  throw new Error(`Timeout: "${text}" still exists`);
+  console.warn(`Teks "${text}" masih ada setelah ${maxRetry} percobaan`);
+  return true; // jangan throw
 }
 
-// ✅ FIXED: polling murni — tidak ada nested callback + setTimeout leak
+/**
+ * Tunggu elemen muncul, dengan flag `settled` untuk cegah timer leak.
+ * @returns {Promise<Element>}
+ */
 function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -361,20 +452,13 @@ function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
     function check() {
       if (settled) return;
 
-      let element = null;
-      try {
-        element = document.evaluate(
-          xpathOrSelector,
-          parentEl || document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null,
-        ).singleNodeValue;
-      } catch (e) {
-        settled = true;
-        reject(new Error(`XPath error: ${xpathOrSelector}`));
-        return;
-      }
+      const element = document.evaluate(
+        xpathOrSelector,
+        parentEl || document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue;
 
       if (element) {
         settled = true;
@@ -391,129 +475,15 @@ function waitForElementAsync(xpathOrSelector, parentEl, timeout = 5000) {
   });
 }
 
-// ============================================================
-// Helper: Tunggu sampai loading shimmer selesai
-// ============================================================
-async function waitUntilLoadingDone(timeout = 5000) {
-  const start = Date.now();
-  const interval = 300;
 
-  while (Date.now() - start < timeout) {
-    const loadingElements = document.querySelectorAll(
-      ".td-loading, .shimmer, [class*='loading'], [class*='shimmer']",
-    );
 
-    let hasVisibleLoading = false;
-    for (const el of loadingElements) {
-      const rect = el.getBoundingClientRect();
-      const style = window.getComputedStyle(el);
-      if (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden"
-      ) {
-        hasVisibleLoading = true;
-        break;
-      }
-    }
-
-    if (!hasVisibleLoading) return true;
-    await new Promise((r) => setTimeout(r, interval));
-  }
-
-  console.warn("[waitUntilLoadingDone] Timeout menunggu loading selesai");
-  return false;
-}
-
-// ============================================================
-// ✅ TAMBAH: Helper — Cek popup "Internal Server Error"
-// ============================================================
-function isServerErrorPopupVisible() {
-  const popups = document.querySelectorAll(
-    "div.p-2, [class*='modal'], [role='dialog']",
-  );
-  for (const popup of popups) {
-    const text = popup.textContent || "";
-    if (
-      text.includes("Internal Server Error") ||
-      text.includes("Belum bisa memproses data")
-    ) {
-      const rect = popup.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) return true;
-    }
-  }
-  return false;
-}
-
-// ============================================================
-// ✅ TAMBAH: Helper — Tutup popup "Internal Server Error"
-// ============================================================
-async function closeServerErrorPopup() {
-  try {
-    const popup = document.evaluate(
-      "//div[contains(., 'Internal Server Error')]/ancestor::div[contains(@class,'p-2')][1]",
-      document,
-      null,
-      XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null,
-    ).singleNodeValue;
-
-    if (!popup) {
-      // Fallback: cari div.p-2 yang mengandung "Internal Server Error"
-      const allPopups = document.querySelectorAll("div.p-2");
-      for (const p of allPopups) {
-        if (p.textContent?.includes("Internal Server Error")) {
-          const btn = p.querySelector("button");
-          if (btn) {
-            clickElement(btn);
-            await sleep(500);
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    const btnOk = popup.querySelector("button");
-    if (btnOk) {
-      clickElement(btnOk);
-      await sleep(500);
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.warn("[closeServerErrorPopup] Error:", err);
-    return false;
-  }
-}
-
-// ============================================================
-// ✅ TAMBAH: Helper — Cari tombol visible by text
-// ============================================================
-function findVisibleButtonByText(texts) {
-  if (!Array.isArray(texts)) texts = [texts];
-
-  const buttons = [
-    ...document.querySelectorAll(
-      "button, input[type='button'], input[type='submit']",
-    ),
-  ];
-  for (const btn of buttons) {
-    const btnText = (btn.textContent || btn.value || "").trim();
-    const rect = btn.getBoundingClientRect();
-    const isVisible =
-      rect.width > 0 && rect.height > 0 && btn.offsetParent !== null;
-    if (!isVisible) continue;
-
-    for (const t of texts) {
-      if (btnText.includes(t)) return btn;
-    }
-  }
-  return null;
-}
-
+/**
+ * Hitung usia dalam tahun dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {number} usia tahun, atau -1 kalau invalid
+ */
 // ==================== AGE HELPERS ====================
+
 /**
  * Kategori umur standar Indonesia (Riskesdas/Kemenkes):
  *   BALITA  : 0-4 tahun
@@ -524,6 +494,11 @@ function findVisibleButtonByText(texts) {
  *   UNKNOWN : tanggal invalid
  */
 
+/**
+ * Hitung usia dalam tahun dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {number} usia tahun, atau -1 kalau invalid
+ */
 function calculateAgeInYears(dateStr) {
   if (!dateStr) return -1;
   const birthDate = parseDDMMYYYY(dateStr);
@@ -539,6 +514,7 @@ function calculateAgeInYears(dateStr) {
 }
 
 // ---------- Fungsi lama (dipertahankan untuk backward compat) ----------
+
 function isUnder10Years(dateStr) {
   const age = calculateAgeInYears(dateStr);
   return age >= 0 && age < 10;
@@ -555,6 +531,7 @@ function isOver60Years(dateStr) {
 }
 
 // ---------- Fungsi kategori umur baru ----------
+
 function isBalita(dateStr) {
   const age = calculateAgeInYears(dateStr);
   return age >= 0 && age < 5;
@@ -580,6 +557,11 @@ function isLansia(dateStr) {
   return age >= 60;
 }
 
+/**
+ * Ambil label kategori umur.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {"BALITA"|"ANAK"|"REMAJA"|"DEWASA"|"LANSIA"|"UNKNOWN"}
+ */
 function getAgeCategory(dateStr) {
   const age = calculateAgeInYears(dateStr);
   if (age < 0) return "UNKNOWN";
@@ -590,6 +572,16 @@ function getAgeCategory(dateStr) {
   return "LANSIA";
 }
 
+/**
+ * Set pekerjaan berdasarkan kategori usia.
+ * BALITA → Belum/Tidak Bekerja
+ * ANAK/REMAJA → Pelajar
+ * DEWASA/LANSIA → biarkan pekerjaan asli
+ *
+ * @param {string} pekerjaan - pekerjaan asli dari input
+ * @param {string} status_usia - hasil getAgeCategory()
+ * @returns {string}
+ */
 function setPekerjaanBasedOnAge(pekerjaan, status_usia) {
   switch (status_usia) {
     case "BALITA":
@@ -599,12 +591,18 @@ function setPekerjaanBasedOnAge(pekerjaan, status_usia) {
       return "Pelajar";
     case "DEWASA":
     case "LANSIA":
-      return pekerjaan;
+      return pekerjaan; // biarkan user pilih
     default:
       return pekerjaan;
   }
 }
 
+/**
+ * Versi ringkas — auto-set pekerjaan default langsung dari tanggal lahir.
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {string} pekerjaanAsli - pekerjaan yang sudah diisi user (opsional)
+ * @returns {string}
+ */
 function getDefaultPekerjaan(dateStr, pekerjaanAsli = "") {
   const kategori = getAgeCategory(dateStr);
   if (kategori === "BALITA") return "Belum/Tidak Bekerja";
@@ -613,19 +611,39 @@ function getDefaultPekerjaan(dateStr, pekerjaanAsli = "") {
 }
 
 // ==================== MARRIAGE / STATUS PERKAWINAN HELPERS ====================
+
+/**
+ * Aturan status perkawinan berdasarkan umur:
+ *   < 19      → "Belum Menikah" (paksa, UU No. 16/2019)
+ *   19        → "Belum Menikah" (default)
+ *   20 - 30   → Random (Menikah / Belum Menikah)
+ *   >= 31     → "Menikah" (paksa, termasuk lansia)
+ */
 const MARRIAGE_RULES = {
   MIN_LEGAL_AGE: 19,
   RANDOM_MIN_AGE: 20,
   RANDOM_MAX_AGE: 30,
   FORCE_KAWIN_AGE: 31,
-  RANDOM_PROB_KAWIN: 0.5,
+  RANDOM_PROB_KAWIN: 0.5, // 50% Menikah, 50% Belum Menikah
 };
 
+/**
+ * Cek apakah seseorang eligible untuk punya status perkawinan
+ * selain "Belum Menikah".
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {boolean}
+ */
 function isEligibleForMarriageStatus(dateStr) {
   const age = calculateAgeInYears(dateStr);
   return age >= MARRIAGE_RULES.MIN_LEGAL_AGE;
 }
 
+/**
+ * Daftar status perkawinan yang valid untuk usia.
+ * Di bawah 19 tahun → hanya "Belum Menikah".
+ * @param {string} dateStr - DD-MM-YYYY
+ * @returns {string[]}
+ */
 function getAllowedStatusPerkawinan(dateStr) {
   if (!isEligibleForMarriageStatus(dateStr)) {
     return ["Belum Menikah"];
@@ -633,14 +651,37 @@ function getAllowedStatusPerkawinan(dateStr) {
   return ["Belum Menikah", "Menikah", "Cerai Hidup", "Cerai Mati"];
 }
 
+/**
+ * Dapatkan default status perkawinan berdasarkan umur.
+ *
+ * Aturan:
+ *   < 19        → "Belum Menikah"
+ *   19          → "Belum Menikah"
+ *   20–30       → Random (Menikah / Belum Menikah)
+ *   >= 31       → "Menikah" (termasuk lansia)
+ *
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {object} options
+ * @param {number} options.probKawin - probabilitas Menikah (0.0 - 1.0), default 0.5
+ * @returns {"Menikah"|"Belum Menikah"}
+ */
 function getDefaultStatusPerkawinan(dateStr, options = {}) {
   const { probKawin = MARRIAGE_RULES.RANDOM_PROB_KAWIN } = options;
 
   const age = calculateAgeInYears(dateStr);
-  if (age < 0) return "Belum Menikah";
-  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) return "Belum Menikah";
-  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) return "Menikah";
+  if (age < 0) return "Belum Menikah"; // invalid → safe default
 
+  // 1. Di bawah umur legal → Belum Menikah
+  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) {
+    return "Belum Menikah";
+  }
+
+  // 2. Di atas rentang random (>= 31) → paksa Menikah (termasuk lansia)
+  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) {
+    return "Menikah";
+  }
+
+  // 3. Rentang random (20–30)
   if (
     age >= MARRIAGE_RULES.RANDOM_MIN_AGE &&
     age <= MARRIAGE_RULES.RANDOM_MAX_AGE
@@ -648,14 +689,35 @@ function getDefaultStatusPerkawinan(dateStr, options = {}) {
     return Math.random() < probKawin ? "Menikah" : "Belum Menikah";
   }
 
+  // 4. Usia 19 → default Belum Menikah
   return "Belum Menikah";
 }
 
+/**
+ * Paksa status perkawinan jadi valid sesuai umur.
+ * - Usia < 19  → "Belum Menikah"
+ * - Usia >= 31 → "Menikah"
+ * - Usia 20-30 → pakai input kalau valid, kalau tidak → default random
+ *
+ * @param {string} statusPerkawinan - dari input user / default form
+ * @param {string} dateStr - DD-MM-YYYY
+ * @param {object} options
+ * @returns {string}
+ */
 function enforceStatusPerkawinan(statusPerkawinan, dateStr, options = {}) {
   const age = calculateAgeInYears(dateStr);
-  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) return "Belum Menikah";
-  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) return "Menikah";
 
+  // Usia < 19 → selalu Belum Menikah
+  if (age < MARRIAGE_RULES.MIN_LEGAL_AGE) {
+    return "Belum Menikah";
+  }
+
+  // Usia >= 31 → selalu Menikah
+  if (age >= MARRIAGE_RULES.FORCE_KAWIN_AGE) {
+    return "Menikah";
+  }
+
+  // Rentang random — pakai input kalau valid
   const validStatuses = [
     "Menikah",
     "Belum Menikah",
@@ -666,19 +728,29 @@ function enforceStatusPerkawinan(statusPerkawinan, dateStr, options = {}) {
     return statusPerkawinan;
   }
 
+  // Input kosong / invalid → pakai default
   return getDefaultStatusPerkawinan(dateStr, options);
 }
 
+/**
+ * Cek apakah status = Menikah / pernah menikah.
+ * Berguna untuk cek "punya anak", "status keluarga", dll.
+ */
 function isEverMarried(statusPerkawinan) {
   return ["Menikah", "Cerai Hidup", "Cerai Mati"].includes(statusPerkawinan);
 }
 
+/**
+ * Alias untuk isEligibleForMarriageStatus (lebih deskriptif).
+ */
 function canHaveMarriageStatus(dateStr) {
   return isEligibleForMarriageStatus(dateStr);
 }
 
 // ==================== PEKERJAAN LABEL ====================
 function getPekerjaanLabel(pekerjaan) {
+  if (!pekerjaan || typeof pekerjaan !== "string") return "Lainnya";
+
   const listPekerjaan = [
     { label: "Belum/Tidak Bekerja", value: "belum-tidak-bekerja" },
     { label: "Pelajar", value: "pelajar" },
@@ -743,10 +815,13 @@ function getPekerjaanLabel(pekerjaan) {
     { label: "Lainnya", value: "lainnya" },
   ];
 
+  // Mapping sinonim diperluas
   const occupationMap = {
     "belum bekerja": "belum-tidak-bekerja",
     "belum/tidak bekerja": "belum-tidak-bekerja",
     "tidak bekerja": "belum-tidak-bekerja",
+    "belum / tidak bekerja": "belum-tidak-bekerja",
+    "tidak/belum bekerja": "belum-tidak-bekerja",
     pelajar: "pelajar",
     "pelajar/mahasiswa": "pelajar",
     mahasiswa: "mahasiswa",
@@ -791,13 +866,13 @@ function getPekerjaanLabel(pekerjaan) {
 
   const inputNormalized = pekerjaan.toLowerCase().trim();
 
-  // Cek 1 — Apakah input sudah persis label?
+  // ✅ FIX: Cek 1 — Apakah input sudah persis label?
   const directMatch = listPekerjaan.find(
     (it) => it.label.toLowerCase() === inputNormalized,
   );
   if (directMatch) return directMatch.label;
 
-  // Cek 2 — Cek via mapping sinonim
+  // ✅ Cek 2 — Cek via mapping sinonim
   const key = pekerjaan.toLowerCase().trim().replace(/\s+/g, " ");
   const value = occupationMap[key] || "lainnya";
   const found = listPekerjaan.find((it) => it.value === value);
@@ -839,7 +914,6 @@ async function selectWithRetry(
         console.warn(`Parent not found (attempt ${attempt}/${maxRetries})`);
         continue;
       }
-
       const childXPath = `.//button[.//div[contains(normalize-space(.), '${childText}')]]`;
       const childEl = await waitForElementAsync(childXPath, parentEl);
       if (childEl) {
@@ -852,12 +926,11 @@ async function selectWithRetry(
       console.error(`Error on attempt ${attempt}:`, err);
     }
   }
-
   console.error(`Failed to find ${childText} after ${maxRetries} retries`);
   return false;
 }
 
-function waitForPageLoad(timeout = 10000) {
+function waitForPageLoad(timeout = 20000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
@@ -873,7 +946,11 @@ function waitForPageLoad(timeout = 10000) {
   });
 }
 
-async function waitForCondition(conditionFn, interval = 5000, timeout = 10000) {
+async function waitForCondition(
+  conditionFn,
+  interval = 5000,
+  timeout = 300000,
+) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const check = async () => {
@@ -984,7 +1061,7 @@ const X_PATH = {
   BTN_TUTUP_SUCCESS_DAFTAR_PESERTA:
     "/html/body/div[1]/main/div/div[1]/section[2]/div/div/div/div[2]/div/div[2]/div[6]/div[2]/div/div[3]/div/button",
   SELECT_SEARCH:
-    "//div[contains(@class, 'cursor-pointer')]//*[normalize-space()='Nomor Tiket']",
+    "//div[contains(@class, 'cursor-pointer')]//span[text()='Nomor Tiket']",
   SELECT_SEARCH_NIK: "//div[contains(@style, 'transform')]//div[text()='NIK']",
   INPUT_SEARCH: "//input[@id='nik' and @placeholder='Masukkan NIK']",
   BTN_KONFIMASI_HADIR:
@@ -1055,7 +1132,7 @@ const X_PATH = {
   BTN_LANJUTKAN_DATA_VALID:
     "//div[contains(normalize-space(),'Data peserta valid')]/ancestor::div[contains(@class,'shadow-gmail')]//button[.//*[normalize-space()='Lanjutkan']]",
   BTN_SELANJUTNYA_FORMULIR_PENDAFTARAN:
-    "//button[contains(@class,'btn-fill-primary')][.//*[normalize-space()='Daftarkan' or normalize-space()='Lanjutkan' or normalize-space()='Selanjutnya']]",
+    "//button[.//*[normalize-space()='Selanjutnya']]",
   BTN_PILIH_TABLE_DATA_PESERTA:
     "//table/tbody/tr[1]//button[contains(., 'Pilih')]",
   BTN_DAFTARKAN_DENGAN_NIK: "//button[contains(., 'Daftarkan dengan NIK')]",
@@ -1075,14 +1152,6 @@ const X_PATH = {
     "//div[normalize-space()='Data peserta atau wali tidak valid']",
   POPUP_DATA_PESERTA_TIDAK_VALID:
     "//div[normalize-space()='Data peserta tidak valid']",
-
-  // ✅ TAMBAH: Popup Internal Server Error
-  POPUP_SERVER_ERROR_MESSAGE:
-    "//span[contains(normalize-space(), 'Belum bisa memproses data')]",
-  POPUP_INTERNAL_SERVER_ERROR:
-    "//div[contains(., 'Internal Server Error')]/ancestor::div[contains(@class,'p-2')][1]",
-  BTN_OK_SERVER_ERROR:
-    "//div[contains(., 'Internal Server Error')]/ancestor::div[contains(@class,'p-2')][1]//button[.//*[normalize-space()='Ok']]",
 
   // Formulir Pendaftaran
   INPUT_STATUS_PERNIKAHAN:

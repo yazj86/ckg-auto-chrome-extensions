@@ -5,14 +5,7 @@ async function runKehadiranSekolah(iData, defData) {
     `🏫 Konfirmasi Kehadiran Sekolah untuk ${iData.no}-${iData.nik}-${iData.nama}`,
   );
 
-  // ✅ TAMBAHKAN: fallback tgl_pemeriksaan
-  let tgl_pemeriksaan = localStorage.getItem(LOCAL_STORAGE.TGL_PEMERIKSAAN);
-  if (!tgl_pemeriksaan) {
-    tgl_pemeriksaan = String(new Date().getDate());
-    localStorage.setItem(LOCAL_STORAGE.TGL_PEMERIKSAAN, tgl_pemeriksaan);
-  }
-
-  const url = MAIN_URL.PENDAFTARAN.SCHOOL;
+  const url = MAIN_URL.PELAYANAN.SCHOOL;
 
   let result;
   try {
@@ -20,7 +13,6 @@ async function runKehadiranSekolah(iData, defData) {
       aktifData: iData,
       defData,
       url,
-      tgl_pemeriksaan,
     });
   } catch (err) {
     console.error("Error di runKehadiranAutofillSekolah:", err);
@@ -49,8 +41,6 @@ async function runKehadiranSekolah(iData, defData) {
     iData.keterangan = result.message;
   } else {
     if (result.status === "ERROR" || result.status === "TIMEOUT") {
-      iData.kehadiran = "GAGAL";
-      iData.status_input = result.status;
       iData.keterangan = result.message;
     } else {
       iData.kehadiran = "GAGAL";
@@ -63,12 +53,7 @@ async function runKehadiranSekolah(iData, defData) {
   return iData;
 }
 
-async function runKehadiranAutofillSekolah({
-  aktifData,
-  defData,
-  url,
-  tgl_pemeriksaan,
-}) {
+async function runKehadiranAutofillSekolah({ aktifData, defData, url }) {
   let targetTabId = null;
   try {
     const targetOrigin = new URL(url).origin;
@@ -108,8 +93,8 @@ async function runKehadiranAutofillSekolah({
         chrome.scripting.executeScript(
           {
             target: { tabId: targetTabId },
-            args: [aktifData, defData, tgl_pemeriksaan],
-            func: async (inData, defData, tgl_pemeriksaan) => {
+            args: [aktifData, defData],
+            func: async (inData, defData) => {
               try {
                 const logStatus = (msg) => {
                   try {
@@ -129,7 +114,7 @@ async function runKehadiranAutofillSekolah({
                   return el;
                 }
 
-                // Helper pilih opsi berdasarkan teks
+                // Helper pilih opsi berdasarkan teks (fleksibel: cari child div atau span)
                 async function pilihOpsiByTeks(teks) {
                   const patterns = [
                     `//div[contains(@class,'cursor-pointer')][.//div[normalize-space()='${teks}']]`,
@@ -169,7 +154,7 @@ async function runKehadiranAutofillSekolah({
 
                   // Pilih sekolah
                   if (namaSekolah) {
-                    logStatus("   → Memilih sekolah...");
+                    logStatus("Memilih sekolah...");
                     const pemicuXPath = `//div[contains(@class,'cursor-pointer')][.//span[normalize-space()='Pilih sekolah']]`;
                     await klikByXPath(pemicuXPath);
                     await sleep(1500);
@@ -177,12 +162,12 @@ async function runKehadiranAutofillSekolah({
                     const option = await pilihOpsiByTeks(namaSekolah);
                     if (!option)
                       throw new Error("Opsi sekolah tidak ditemukan");
-                    logStatus(`   ✅ Sekolah "${namaSekolah}" dipilih.`);
+                    logStatus(`✅ Sekolah "${namaSekolah}" dipilih.`);
                     await sleep(500);
                   }
 
                   // Pilih kelas
-                  logStatus("   → Memilih kelas...");
+                  logStatus("Memilih kelas...");
                   const pemicuKelasXPath = `//div[contains(@class,'cursor-pointer')][.//span[normalize-space()='Pilih kelas']]`;
                   await klikByXPath(pemicuKelasXPath);
                   await sleep(1500);
@@ -190,21 +175,16 @@ async function runKehadiranAutofillSekolah({
                   const optionKelas = await pilihOpsiByTeks(jenjang);
                   if (!optionKelas)
                     throw new Error("Opsi kelas tidak ditemukan");
-                  logStatus(`   ✅ Kelas "${jenjang}" dipilih.`);
+                  logStatus(`✅ Kelas "${jenjang}" dipilih.`);
                   await sleep(500);
                 }
 
                 logStatus(
                   "Data diterima, mulai proses konfirmasi kehadiran...",
                 );
-                logStatus(`   → Tgl pemeriksaan: ${tgl_pemeriksaan}`);
-
                 const state = { earlyExit: null };
 
                 const steps = [
-                  // ============================================================
-                  // STEP 1 — Pilih sekolah & kelas
-                  // ============================================================
                   {
                     name: "Pilih Sekolah dan Kelas",
                     action: async () => {
@@ -212,10 +192,6 @@ async function runKehadiranAutofillSekolah({
                       await selectSekolahDanJenjang();
                     },
                   },
-
-                  // ============================================================
-                  // STEP 2 — Tampilkan pencarian
-                  // ============================================================
                   {
                     name: "Tampilkan Pencarian",
                     action: async () => {
@@ -233,10 +209,6 @@ async function runKehadiranAutofillSekolah({
                       await sleep(2000);
                     },
                   },
-
-                  // ============================================================
-                  // STEP 3 — Pilih tipe pencarian NIK
-                  // ============================================================
                   {
                     name: "Pilih Tipe Pencarian NIK",
                     action: async () => {
@@ -257,14 +229,10 @@ async function runKehadiranAutofillSekolah({
                       const optionNIK = await pilihOpsiByTeks("NIK");
                       if (!optionNIK)
                         throw new Error("Opsi NIK tidak ditemukan");
-                      logStatus("   ✅ Tipe pencarian NIK dipilih.");
+                      logStatus("✅ Tipe pencarian NIK dipilih.");
                       await sleep(500);
                     },
                   },
-
-                  // ============================================================
-                  // STEP 4 — Cari NIK
-                  // ============================================================
                   {
                     name: "Cari NIK",
                     action: async () => {
@@ -293,7 +261,7 @@ async function runKehadiranAutofillSekolah({
                         }
                         if (inputNIK) break;
                         logStatus(
-                          `   ⏱️ Percobaan ${attempt + 1}: input NIK belum muncul, menunggu...`,
+                          `Percobaan ${attempt + 1}: input NIK belum muncul, menunggu...`,
                         );
                         await sleep(3000);
                       }
@@ -310,17 +278,9 @@ async function runKehadiranAutofillSekolah({
                       inputNIK.focus();
                       await sleep(100);
                       enterKeyElement(inputNIK);
-
-                      // ✅ TAMBAH: tunggu hasil pencarian + shimmer
-                      await sleepUntilLoaded(750, "Proses pencarian data", 20);
-                      await waitUntilLoadingDone(15000);
-                      await sleep(500);
+                      await sleep(1000);
                     },
                   },
-
-                  // ============================================================
-                  // STEP 5 — Konfirmasi hadir
-                  // ============================================================
                   {
                     name: "Konfirmasi Hadir",
                     action: async () => {
@@ -333,13 +293,9 @@ async function runKehadiranAutofillSekolah({
 
                       const checkBtnKonfirmHadir = waitForElementAsync(
                         xpathKonfirm,
-                        null,
-                        10000,
                       ).then(() => "CONFIRM_HADIR");
                       const checkSudahHadir = waitForElementAsync(
                         xpathSudahHadir,
-                        null,
-                        10000,
                       ).then(() => "SUDAH_HADIR");
 
                       try {
@@ -347,34 +303,28 @@ async function runKehadiranAutofillSekolah({
                           checkBtnKonfirmHadir,
                           checkSudahHadir,
                         ]);
-
                         if (status === "CONFIRM_HADIR") {
-                          logStatus("   → Tombol Konfirmasi Hadir ditemukan");
-                          const btnKonfirmHadir = await waitForElementAsync(
-                            xpathKonfirm,
-                            null,
-                            5000,
-                          );
+                          logStatus("Tombol Konfirmasi Hadir ditemukan.");
+                          const btnKonfirmHadir =
+                            await waitForElementAsync(xpathKonfirm);
                           clickElement(btnKonfirmHadir);
-
-                          // ✅ TAMBAH: tunggu loading setelah konfirmasi
-                          await waitUntilLoadingDone(20000);
-                          await sleep(1000);
-
-                          logStatus("   → Konfirmasi berhasil diklik");
+                          await sleepUntilLoaded(
+                            750,
+                            "Proses pencarian data",
+                            20,
+                          );
                         } else if (status === "SUDAH_HADIR") {
-                          logStatus("   → Sudah terkonfirmasi hadir (skip)");
+                          logStatus("Sudah terkonfirmasi hadir!");
                           state.earlyExit = {
                             success: true,
                             status: "-- ON PROGRESS --",
-                            message: "Sudah terkonfirmasi hadir",
+                            message: "Berhasil Konfirmasi Kehadiran",
                           };
                         }
                       } catch (err) {
                         logStatus(
-                          "   ❌ Timeout: Konfirmasi kehadiran tidak ditemukan",
+                          "Timeout: Konfirmasi kehadiran tidak ditemukan!",
                         );
-                        console.warn("[Konfirmasi] Error:", err);
                         state.earlyExit = {
                           success: false,
                           status: "TIMEOUT",
@@ -384,50 +334,27 @@ async function runKehadiranAutofillSekolah({
                       }
                     },
                   },
-
-                  // ============================================================
-                  // STEP 6 — Bersedia CKG
-                  // ============================================================
                   {
                     name: "Bersedia CKG",
                     shouldRun: () => !state.earlyExit,
                     action: async () => {
                       logStatus("6. Bersedia di CKG...");
-
-                      try {
-                        const checkboxBersediaCKG = await waitForElementAsync(
-                          X_PATH.CHECKBOX_BERSEDIA_CKG,
-                          null,
-                          10000,
-                        );
-                        clickElement(checkboxBersediaCKG);
-                        await sleep(500);
-
-                        const btnHadirOK = await waitForElementAsync(
-                          X_PATH.BTN_HADIR_CKG,
-                          null,
-                          10000,
-                        );
-                        clickElement(btnHadirOK);
-
-                        // ✅ TAMBAH: tunggu loading
-                        await waitUntilLoadingDone(20000);
-                        await sleep(1000);
-
-                        logStatus("   → Bersedia CKG terkirim");
-                      } catch (err) {
-                        logStatus(
-                          `   ⚠️ Bersedia CKG gagal: ${err.message}`,
-                        );
-                        console.warn("[BersediaCKG] Error:", err);
-                        // Tidak set earlyExit — biarkan step berikut coba
-                      }
+                      const checkboxBersediaCKG = await waitForElementAsync(
+                        X_PATH.CHECKBOX_BERSEDIA_CKG,
+                        null,
+                        5000,
+                      );
+                      clickElement(checkboxBersediaCKG);
+                      await sleep(500);
+                      const btnHadirOK = await waitForElementAsync(
+                        X_PATH.BTN_HADIR_CKG,
+                        null,
+                        5000,
+                      );
+                      clickElement(btnHadirOK);
+                      await sleepUntilLoaded(750, "Memproses data", 20);
                     },
                   },
-
-                  // ============================================================
-                  // STEP 7 — Popup Success
-                  // ============================================================
                   {
                     name: "Popup Success",
                     shouldRun: () => !state.earlyExit,
@@ -439,13 +366,15 @@ async function runKehadiranAutofillSekolah({
                           null,
                           15000,
                         );
-                        logStatus("   ✅ Popup berhasil muncul");
+                        logStatus("✅ Popup berhasil muncul.");
                       } catch (err) {
-                        logStatus(
-                          "   ⚠️ Popup berhasil tidak muncul — cek manual",
-                        );
-                        console.warn("[PopupSuccess] Timeout");
-                        // Tidak set earlyExit — kadang popup telat muncul
+                        logStatus("Timeout: Popup berhasil tidak muncul!");
+                        state.earlyExit = {
+                          success: false,
+                          status: "TIMEOUT",
+                          message:
+                            "System timeout waiting for Konfirmasi hadir response",
+                        };
                       }
                     },
                   },
