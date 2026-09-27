@@ -431,12 +431,8 @@ function processAndValidateAge(row) {
   }
 
   const birthDate = parseDDMMYYYY(row.tgl_lahir);
-  if (isNaN(birthDate.getTime())) {
-    row.status_usia = "";
-    return row;
-  }
-
   const today = new Date();
+
   let ageInYears = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
 
@@ -447,20 +443,16 @@ function processAndValidateAge(row) {
     ageInYears--;
   }
 
-  // ✅ Kategori Kemenkes
-  if (ageInYears < 5) {
+  if (ageInYears < 6) {
     row.status_usia = "BALITA";
-  } else if (ageInYears < 10) {
-    row.status_usia = "ANAK";
-  } else if (ageInYears < 20) {
-    row.status_usia = "REMAJA";
-  } else if (ageInYears < 60) {
-    row.status_usia = "DEWASA";
-  } else {
+  } else if (ageInYears >= 6 && ageInYears < 18) {
+    row.status_usia = "SEKOLAH";
+  } else if (ageInYears >= 60) {
     row.status_usia = "LANSIA";
+  } else {
+    row.status_usia = "";
   }
 
-  // Wali hanya wajib untuk BALITA
   if (row.status_usia !== "BALITA") {
     row.nik_wali = "-";
     row.nama_wali = "-";
@@ -468,7 +460,6 @@ function processAndValidateAge(row) {
     row.jenis_kelamin_wali = "-";
     row.no_hp_wali = "-";
   }
-
   return row;
 }
 

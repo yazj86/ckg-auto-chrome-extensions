@@ -36,11 +36,9 @@ const PerkawinanOptions = [
 // Dipakai oleh background.js saat isi form demografi
 const defaultStatusPerkawinanByUsia = {
   BALITA: "Belum Menikah",
-  ANAK: "Belum Menikah",
-  SEKOLAH: "Belum Menikah", // legacy
-  REMAJA: "Belum Menikah",
-  DEWASA: "Menikah",
-  LANSIA: "Menikah",
+  SEKOLAH: "Belum Menikah",
+  LANSIA: "Menikah", // ⬅️ bisa diubah sesuai kebijakan
+  // "" (dewasa 18-59 tahun) → pakai field.default
 };
 
 const StatusOptions = ["OK", "MANUAL", "GAGAL", "LEWATI"];
@@ -494,15 +492,15 @@ const dataSchema = [
       options: ["Ya", "Tidak", "Ya/Ada", "Tidak/Tidak Ada"],
     },
   },
-{
-  mainKey: "status_usia",
-  label: "Status Usia",
-  keys: ["status_usia", "jenis_ckg"],
-  validation: {
-    type: "system_calculated",
-    options: ["BALITA", "ANAK", "REMAJA", "DEWASA", "LANSIA"],
+  {
+    mainKey: "status_usia",
+    label: "Status Usia",
+    keys: ["status_usia", "jenis_ckg"],
+    validation: {
+      type: "system_calculated",
+      options: ["LANSIA", "BALITA", "SEKOLAH"],
+    },
   },
-},
   {
     mainKey: "nik_wali",
     label: "NIK Wali",
@@ -895,28 +893,6 @@ const pemeriksaanDataSchema = {
       },
     ],
   },
-demografiRemaja: {
-  key: "demografiRemaja",
-  label: "Demografi Remaja",
-  input: [
-    {
-      key: "status_perkawinan",
-      label: "Status Perkawinan",
-      type: "enum",
-      required: true,
-      default: "Belum Menikah",
-      options: PerkawinanOptions,
-    },
-    {
-      key: "status_disabilitas",
-      label: "Apakah Anda penyandang disabilitas?",
-      type: "enum",
-      required: true,
-      default: "Non disabilitas",
-      options: DisabilitasOptions,
-    },
-  ],
-},
   demografiDewasaLakiLaki: {
     key: "demografiDewasaLakiLaki",
     label: "Demografi Dewasa Laki-Laki",
@@ -1327,57 +1303,21 @@ demografiRemaja: {
       },
     ],
   },
-   faktorRisikoGulaDarahAnak: {
-  key: "faktorRisikoGulaDarahAnak",
-  label: "Faktor Risiko Gula Darah Anak",
-  input: [
-    {
-      key: "riwayat_diabetes_anak",
-      label:
-        "Apakah Anak Anda pernah dinyatakan diabetes atau kencing manis oleh Dokter?",
-      type: "enum",
-      required: true,
-      default: "Tidak",
-      options: YaTidakOptions, 
-    },
-    {
-      key: "sering_lapar",
-      label:
-        "Apakah anak bapak/ibu sering merasa sangat lapar dan makan lebih banyak dari biasanya?",
-      type: "enum",
-      required: true,
-      default: "Tidak",
-      options: ["Iya", "Tidak"], 
-    },
-    {
-      key: "sering_haus",
-      label:
-        "Apakah anak bapak/ibu sering merasa haus meskipun sudah banyak minum?",
-      type: "enum",
-      required: true,
-      default: "Tidak",
-      options: YaTidakOptions, 
-    },
-    {
-      key: "penurunan_berat_badan",
-      label:
-        "Apakah anak bapak/ibu tetap mengalami penurunan berat badan meskipun nafsu makan meningkat?",
-      type: "enum",
-      required: true,
-      default: "Tidak",
-      options: ["Iya", "Tidak"], 
-    },
-    {
-      key: "riwayat_keluarga_diabetes",
-      label:
-        "Apakah bapak/ibu atau anggota keluarga lainnya (saudara kandung) yang pernah di diagnosis Kencing Manis oleh Dokter?",
-      type: "enum",
-      required: true,
-      default: "Tidak",
-      options: ["Iya", "Tidak"], 
-    },
-  ],
-},
+  faktorRisikoGulaDarahAnak: {
+    key: "faktorRisikoGulaDarahAnak",
+    label: "Faktor Risiko Gula Darah Anak",
+    input: [
+      {
+        key: "riwayat_diabetes_anak",
+        label:
+          "Apakah Anak Anda pernah dinyatakan diabetes atau kencing manis oleh Dokter?",
+        type: "enum",
+        required: true,
+        default: "Tidak",
+        options: YaTidakOptions,
+      },
+    ],
+  },
   riwayatImunisasiRutinBalita: {
     key: "riwayatImunisasiRutinBalita",
     label: "Riwayat Imunisasi Rutin Balita",
